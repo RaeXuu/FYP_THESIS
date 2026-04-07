@@ -29,7 +29,8 @@
 
   # 引入内容到指定文件夹                                              
 
-  git subtree add --prefix=notes-from-pi FYP_rasp markdown-only  --squash           git subtree add --prefix=notes-from-PC FYP_PC markdown-only  --squash
+  git subtree add --prefix=notes-from-pi FYP_rasp markdown-only  --squash           
+  git subtree add --prefix=notes-from-PC FYP_PC markdown-only  --squash
 
   ---
 

@@ -41,12 +41,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "神经网络架构图工具.md",
+                "file": "Git Subtree 指南.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "神经网络架构图工具"
+              "title": "Git Subtree 指南"
             }
           }
         ],
@@ -225,10 +225,10 @@
   },
   "active": "05db5c250a610774",
   "lastOpenFiles": [
+    "代理.md",
+    "API Key.md",
     "Git Subtree 指南.md",
     "神经网络架构图工具.md",
-    "API Key.md",
-    "代理.md",
     "欢迎.md",
     "benchmark.py.md",
     "notes-from-pi/RECORD.md",
