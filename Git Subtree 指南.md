@@ -20,17 +20,17 @@
 
   **第二步：在仓库C添加远程并引入内容**
 
-  cd /path/to/repo-c
+cd /path/to/repo-c
 
   # 添加远程（只需做一次）
 
-  git remote add FYP_rasp https://github.com/RaeXuu/FYP_raspberry_pi.git
-  git remote add FYP_PC https://github.com/RaeXuu/FYP.git
+git remote add FYP_rasp https://github.com/RaeXuu/FYP_raspberry_pi.git
+git remote add FYP_PC https://github.com/RaeXuu/FYP.git
 
   # 引入内容到指定文件夹                                              
 
-  git subtree add --prefix=notes-from-pi FYP_rasp markdown-only  --squash           
-  git subtree add --prefix=notes-from-PC FYP_PC markdown-only  --squash
+git subtree add --prefix=notes-from-pi FYP_rasp markdown-only  --squash           
+git subtree add --prefix=notes-from-PC FYP_PC markdown-only  --squash
 
   ---
 
@@ -38,14 +38,11 @@
 
   **从 repo-a 拉取最新内容到仓库C：**
 
-  git subtree pull --prefix=notes-from-pi FYP_rasp markdown-only  --squash   
-              
-  git subtree pull --prefix=notes-from-PC FYP_PC markdown-only  --squash                                        
+git subtree pull --prefix=notes-from-pi FYP_rasp markdown-only  --squash   
+git subtree pull --prefix=notes-from-PC FYP_PC markdown-only  --squash                                        
 
   **把仓库C的修改推回 repo-a：**
 
-  git subtree push --prefix=notes-from-pi FYP_rasp markdown-only      
-  
-  git subtree push --prefix=notes-from-PC FYP_PC markdown-only     
+git subtree push --prefix=notes-from-pi FYP_rasp markdown-only  git subtree push --prefix=notes-from-PC FYP_PC markdown-only     
   ---                                                       
   
