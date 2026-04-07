@@ -38,11 +38,14 @@
 
   **从 repo-a 拉取最新内容到仓库C：**
 
-  git subtree pull --prefix=notes-from-pi FYP_rasp markdown-only  --squash               git subtree pull --prefix=notes-from-PC FYP_PC markdown-only  --squash                                        
+  git subtree pull --prefix=notes-from-pi FYP_rasp markdown-only  --squash   
+              
+  git subtree pull --prefix=notes-from-PC FYP_PC markdown-only  --squash                                        
 
   **把仓库C的修改推回 repo-a：**
 
   git subtree push --prefix=notes-from-pi FYP_rasp markdown-only      
+  
   git subtree push --prefix=notes-from-PC FYP_PC markdown-only     
   ---                                                       
   
