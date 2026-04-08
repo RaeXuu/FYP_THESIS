@@ -423,7 +423,97 @@ Early stop 触发于 Epoch 15
 
 ## SQA 模型（LightweightCNN）
 
-*(待填)*
+### 标签约定说明
+
+**原始 `metadata_quality.csv`（由 `load_quality.py` 生成）**
+
+| label | 含义 | 数量 |
+|-------|------|------|
+| 0 | 差质量（score == 0） | 364 |
+| 1 | 好质量（score != 0） | 2876 |
+
+**问题**：若直接使用原始 CSV，M-Score 的 Sensitivity = 召回 class 1 = 好质量检出率，与 SQA 的目标相反——我们想要的是**别漏掉差质量音频**，防止噪声送进诊断模型。
+
+**解决方案**：新生成 `metadata_quality_reversed.csv`（`flip_label=True`），反转标签：
+
+| label | 含义 | 数量 |
+|-------|------|------|
+| 0 | 好质量 | 2876 |
+| 1 | 差质量（正类） | 364 |
+
+这样 Sensitivity = 差质量检出率，与诊断模型的逻辑一致（正类 = 需要被检出的类）。
+
+- 生成脚本：`src/preprocess/load_quality.py`（`flip_label=True` 参数）
+- 训练使用：`metadata_quality_reversed.csv`
+
+---
+
+### 训练配置
+
+与诊断模型共用架构和超参，差异如下：
+
+| 项目 | 诊断模型 | SQA 模型 |
+|------|---------|---------|
+| 训练脚本 | `train_lightweight_with_test.py` | `train_sqa_with_test.py` |
+| metadata | `metadata_physionet.csv` | `metadata_quality_reversed.csv` |
+| 模型保存 | `checkpoints/best_model.pth` | `checkpoints/best_model_sqa.pth` |
+| test split | `data/test_split.csv` | `data/test_split_sqa.csv` |
+| class names | Normal(0) / Abnormal(1) | Good(0) / Bad(1) |
+| 类别不平衡 | 4:1 | 8:1 |
+| Se 定义 | abnormal 检出率 | 差质量检出率（pos_label=1） |
+| 架构 | LightweightCNN（CoordAtt，65.12K） | 相同 |
+| 超参 | batch=16, lr=1e-3, wd=1e-4 | 相同 |
+
+---
+
+### SQA Run 1 — 2026-04-09（基线训练）
+
+**配置**
+```
+脚本：train_sqa_with_test.py
+数据集：metadata_quality_reversed.csv（3240 条，Good=2876 / Bad=364）
+划分：80/10/10（按 fname 分组，seed=42）
+Train: 54842 | Val: 6536 | Test: 6726
+类别不平衡：8:1（WeightedRandomSampler）
+超参：batch=16, lr=1e-3, wd=1e-4, epochs=50, early_stop_patience=10
+架构：LightweightCNN（CoordAtt，65.12K，与诊断模型相同）
+预处理：n_mels=64, hop=128（Run 6 最优参数）
+```
+
+**Val 训练过程（振荡剧烈）**
+
+| Epoch | Val Se(bad) | Val Sp(good) | Val M-Score |
+|-------|-------------|--------------|-------------|
+| 1 | 0.7409 | 0.8592 | 0.8000 ✅ |
+| 3 | 0.7263 | 0.8826 | 0.8044 ✅ |
+| 9 | 0.7172 | 0.9036 | 0.8104 ✅ |
+| **12** | **0.7281** | **0.9050** | **0.8165 ✅ 最优** |
+| 22 | 0.6825 | 0.9377 | 0.8101（Early Stop）|
+
+**Test 集最终结果**
+
+| 指标 | 值 |
+|------|----|
+| Test M-Score | 0.8046 |
+| Test Se（差质量检出率） | 0.7173 |
+| Test Sp（好质量识别率） | 0.8919 |
+| Test Accuracy | 0.8794 |
+| Test Loss | 0.3415 |
+
+**分析**
+- **Se(bad) = 0.7173 是最大问题**：28.3% 的差质量录音被漏过，会将噪声送入诊断模型，直接影响系统可靠性
+- Val 振荡剧烈（M-Score 在 0.78–0.82 间反复波动），训练不稳定，最优点在 Epoch 12 后再未出现
+- 8:1 不平衡比诊断模型 4:1 更严重，WeightedRandomSampler 已用但仍不足以解决少数类学习问题
+- Val→Test 泛化差距：M-Score 0.8165 → 0.8046（-0.012），Se 0.7281 → 0.7173（-0.011），比诊断模型泛化差距大
+- Sp(good) = 0.8919 尚可，误过滤好录音约 10.8%，对系统吞吐量有影响但可接受
+
+**与诊断模型对比**
+| 模型 | Test M-Score | Test Se | Test Sp | 不平衡比 |
+|------|-------------|---------|---------|---------|
+| 诊断模型（Run 6） | 0.8903 | 0.9485 | 0.8322 | 4:1 |
+| SQA 模型（Run 1） | 0.8046 | 0.7173 | 0.8919 | 8:1 |
+
+SQA Se 比诊断模型低 0.23，差距明显，需要针对性改进。
 
 ---
 
