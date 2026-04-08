@@ -81,6 +81,8 @@
 - 采用 **GAP + GATT 架构**：ESP32 作为 Peripheral（外设），Raspberry Pi 作为 Central（中央设备）。
 - 核心传输机制：**Notify 模式**（主动推送），消除请求-响应握手的延迟，保证实时音频的时序完整性。
 
+2.3.3 Relevant Algorithm Theories
+
 ### 2.4 系统整体框架
 系统由三部分组成：
 1. **硬件采集终端**：MEMS 麦克风 → ESP32-C3（I2S 采集 + 降采样 + BLE 5.0 Notify 上传）
