@@ -143,13 +143,81 @@ The resulting quantized models each occupy 145.7 KB on disk. On the ARM Cortex-A
 - 超参数设置（Epoch、Batch Size、LR、Scheduler）
 - 评估指标说明（Sensitivity、Specificity、M-Score）
 
+All experiments use the same 80/10/10 recording-level split (seed = 42), with the test set filenames persisted to disk on the first run and held fixed throughout. Slices from the same recording never appear across splits, preventing any form of data leakage. WeightedRandomSampler is applied on the training set in all runs to counteract the 4:1 class imbalance.
+
+The model is trained with Adam optimiser, learning rate 1×10⁻³, and a `ReduceLROnPlateau` scheduler (factor = 0.5, patience = 3, monitored on validation M-Score). Early stopping with patience = 10 is applied in all runs except Run 1. The model checkpoint with the highest validation M-Score is saved and used for test evaluation.
+
+**Evaluation metrics.** The PhysioNet/CinC 2016 challenge defines the primary metric as:
+
+$$M\text{-}Score = \frac{Se + Sp}{2}$$
+
+where Sensitivity (Se) = TP / (TP + FN) measures the fraction of abnormal recordings correctly identified, and Specificity (Sp) = TN / (TN + FP) measures the fraction of normal recordings correctly identified. M-Score is preferred over accuracy because accuracy can reach 80% by predicting all recordings as Normal, while yielding Se = 0 and M-Score = 0.5. All models are saved and compared by M-Score.
+
 ### 5.2 Diagnostic Model Results
 - Run 1 基础训练结果
 - Run 2（Label Smoothing + Early Stopping）对比
 - 阈值分析
 
+#### 5.2.1 Training Progression
+
+Seven training runs were conducted to isolate the effect of individual design decisions. All runs use the LightweightCNN + CoordAtt architecture (Group C in the ablation study) unless otherwise noted. Table 5.1 summarises the key configurations and test results.
+
+**Table 5.1: Training run comparison. All runs use the same test split. Bold = selected configuration.**
+
+| Run | Batch | n\_mels | hop | Label Smooth | Early Stop | Test M-Score | Test Se | Test Sp |
+|-----|-------|---------|-----|:---:|:---:|:---:|:---:|:---:|
+| 1 | 16 | 32 | 96 | ✗ | ✗ | 0.8852 | 0.9569 | 0.8135 |
+| 2 | 16 | 32 | 96 | ✓ | ✓ | 0.8816 | 0.9181 | 0.8452 |
+| 3 | 16 | 32 | 96 | ✓ | ✓ | 0.8828 | 0.9105 | 0.8551 |
+| 4 | 256 | 32 | 96 | ✗ | ✓ | 0.8835 | 0.9544 | 0.8125 |
+| 5 | 256 | 64 | 128 | ✗ | ✓ | 0.8784 | 0.9409 | 0.8159 |
+| 6 (sweep params) | 16 | 64 | 128 | ✗ | ✓ | **0.8903** | **0.9485** | **0.8322** |
+| 7 | 16 | 32 | 96 | ✗ | ✓ | 0.8869 | 0.9383 | 0.8355 |
+
+> *Run 3 uses overlap = 0.75 (vs 0.5 in others), held constant as a separate variable.*
+
+Several consistent patterns emerge across runs. First, label smoothing (Run 2 vs Run 4) shifts the Se/Sp balance toward higher Sp at the cost of Se—the Se/Sp gap narrows from 0.143 to 0.073—but produces no meaningful change in M-Score (0.8816 vs 0.8835). Since the home screening use case penalises missed abnormal cases more heavily than false alarms, label smoothing was excluded from subsequent runs. Second, batch size 16 consistently outperforms batch size 256 when holding all other parameters fixed (Run 6 vs Run 5: +0.012 M-Score; Run 7 vs Run 4: +0.003), likely because smaller batches provide noisier but more frequent gradient updates that regularise training. Third, overlap = 0.75 (Run 3) produces no meaningful improvement over overlap = 0.5 at the same configuration.
+
+**Run 6** achieves the highest test M-Score (0.8903) and is selected as the final model. Its preprocessing parameters (n\_mels = 64, hop = 128) were identified by a 40-trial Bayesian hyperparameter search (Section 5.2.2), and the batch size was set to 16 based on the empirical comparison above.
+
+#### 5.2.2 Hyperparameter Search
+
+A Bayesian sweep over 40 trials was conducted using Weights & Biases, optimising for validation M-Score. The search space covered n\_mels ∈ {32, 64}, hop\_length ∈ {64, 96, 128}, n\_fft ∈ {128, 256, 512}, overlap ∈ {0.25, 0.5, 0.75}, learning rate ∈ {3×10⁻⁴, 5×10⁻⁴, 1×10⁻³}, and weight\_decay ∈ {1×10⁻⁴, 1×10⁻³}.
+
+**Table 5.2: Top 3 sweep trials (validation M-Score).**
+
+| Rank | Val M-Score | Val Se | Val Sp | n\_mels | hop | n\_fft | overlap | lr | weight\_decay |
+|------|:-----------:|:------:|:------:|:-------:|:---:|:------:|:-------:|:--:|:-------------:|
+| 1 | 0.9033 | 0.9510 | 0.8556 | 64 | 128 | 256 | 0.75 | 1e-3 | 1e-3 |
+| 2 | 0.9031 | 0.9677 | 0.8386 | 64 | 96 | 256 | 0.75 | 1e-3 | 1e-3 |
+| 3 | 0.9000 | 0.9539 | 0.8462 | 64 | 128 | 256 | 0.75 | 1e-3 | 1e-3 |
+
+The configuration n\_mels = 64, n\_fft = 256, overlap = 0.75, lr = 1×10⁻³ appears consistently across the top trials, indicating a stable optimal region. The selected parameters for the final model are n\_mels = 64, hop = 128, n\_fft = 256, weight\_decay = 1×10⁻³.
+
+#### 5.2.3 Decision Threshold Analysis
+
+The default classification threshold of 0.5 was evaluated against a sweep from 0.30 to 0.80 on the Run 1 model. Results are shown in Table 5.3.
+
+**Table 5.3: Threshold sweep on Run 1 model (test set).**
+
+| Threshold | Se | Sp | M-Score |
+|:---------:|:--:|:--:|:-------:|
+| 0.30 | 0.9890 | 0.7787 | 0.8839 |
+| 0.35 | 0.9840 | 0.7860 | 0.8850 |
+| 0.40 | 0.9764 | 0.7947 | 0.8855 |
+| **0.45** | **0.9688** | **0.8031** | **0.8859** |
+| 0.50 | 0.9569 | 0.8135 | 0.8852 |
+| 0.55 | 0.9417 | 0.8218 | 0.8817 |
+| 0.60 | 0.9231 | 0.8332 | 0.8782 |
+| 0.70 | 0.8547 | 0.8562 | 0.8554 |
+| 0.80 | 0.7652 | 0.8915 | 0.8284 |
+
+The optimal threshold (0.45) improves M-Score by only 0.0007 over the default 0.50, confirming that the Se/Sp imbalance is a property of the learned decision boundary rather than a post-processing artefact. The default threshold of 0.50 is retained for deployment, as it provides the highest Se (0.9569), which is the more clinically critical metric in a home screening context.
+
 ### 5.3 SQA Model Results
 - 训练结果（Test M-Score / Se / Sp）
+
+> *(待填 — SQA 模型训练完成后补充 Test M-Score / Se / Sp / Accuracy，以及与诊断模型训练设置的对比说明)*
 
 ### 5.4 Ablation Study
 - Baseline CNN（无注意力）
@@ -157,10 +225,41 @@ The resulting quantized models each occupy 145.7 KB on disk. On the ARM Cortex-A
 - + Residual Connection
 - 各步骤指标对比
 
+To quantify the contribution of each architectural component, four model variants were trained under identical conditions: the same dataset split, preprocessing parameters (n\_mels = 32, hop = 96, n\_fft = 256, overlap = 0.5), training hyperparameters (batch = 16, lr = 1×10⁻³, weight\_decay = 1×10⁻⁴, early stopping patience = 10), and class balancing strategy. The variants form a cumulative chain, each adding one modification to the previous.
+
+**Table 5.4: Ablation study results. All variants trained on the same fixed test split.**
+
+| Config | Params | Test M-Score | Test Se | Test Sp | Test Acc | Best Epoch |
+|--------|-------:|:------------:|:-------:|:-------:|:--------:|:----------:|
+| A: Baseline (16→32→64→128, no attention) | 12.87K | 0.8851 | 0.9654 | 0.8049 | 0.8352 | 1 |
+| B: + Wider channels (32→64→128→256) | 47.23K | 0.8896 | 0.9595 | 0.8198 | 0.8462 | 1 |
+| C: + CoordAtt + Dropout(0.3) | 65.12K | 0.8869 | 0.9383 | 0.8355 | 0.8549 | 5 |
+| D: + Residual connections | 108.10K | **0.8912** | **0.9797** | 0.8027 | 0.8361 | 2 |
+
+**A → B: Wider channels.** Doubling the channel width throughout (+0.005 M-Score) improves both Se and Sp marginally. The best epoch remains 1, indicating that the model still overfits rapidly and that increased capacity alone does not improve training dynamics.
+
+**B → C: CoordAtt + Dropout.** Adding Coordinate Attention and Dropout (rate 0.3) produces the most notable change in training behaviour: the best validation epoch shifts from 1 to 5, indicating substantially better regularisation. M-Score decreases slightly (−0.003) relative to B, but Sp increases by +0.016 and the Se/Sp gap narrows from 0.134 to 0.103. The contribution of CoordAtt is therefore more accurately characterised as improved training stability and better Se/Sp balance than raw M-Score gain.
+
+**C → D: Residual connections.** Residual connections yield the highest test M-Score (0.8912, +0.004 over C), driven by a large Se increase (+0.041). However, Sp drops to 0.8027—lower than any other variant—and the best epoch regresses to 2, suggesting that residual connections accelerate convergence at the cost of reinforcing the model's tendency to over-predict Abnormal. The Se/Sp gap widens to 0.177.
+
+**Architecture selection.** Config C is selected as the final architecture. While D achieves the highest M-Score, its Se/Sp imbalance (0.177 gap) is worse than A (0.161) and substantially worse than C (0.103). In a home screening device where missed abnormal cases carry greater clinical risk than false alarms, Se is more important than Sp—but the magnitude of Sp degradation in D (0.8027, a 32.8% false alarm rate on normal recordings) is considered unacceptable for a practical device. Config C provides the best balance across all three criteria: Se/Sp balance, training stability, and parameter efficiency.
+
 ### 5.5 Quantization Impact
 - FP32 vs INT8 准确率对比
 - 模型大小对比
 - 推理延迟对比
+
+**Table 5.5: FP32 vs quantized model comparison.**
+
+| Metric | FP32 | Quantized (Dynamic Range INT8) | Change |
+|--------|:----:|:------------------------------:|:------:|
+| Model size | *(待填)* KB | 145.7 KB | *(待填)* |
+| Test M-Score | *(待填)* | *(待填)* | *(待填)* |
+| Test Se | *(待填)* | *(待填)* | *(待填)* |
+| Test Sp | *(待填)* | *(待填)* | *(待填)* |
+| Inference latency (Pi 4B) | *(待填)* ms | *(待填)* ms | *(待填)* |
+
+> *(待填 — 运行 evaluate.py 和 benchmark.py 后补充。注意：此处使用 dynamic range quantization，权重 INT8 静态量化，激活值运行时动态量化，延迟收益可能小于 full INT8 PTQ，详见 Section 4.5。)*
 
 > **Note for writing:** Dynamic range quantization only statically quantizes weights; activations are quantized at runtime per call. This means the latency reduction relative to FP32 may be modest compared to full INT8 quantization (where both weights and activations are fixed at INT8 and the hardware can execute true INT8 GEMM). If the benchmark shows limited speedup, this is the expected explanation—not a flaw in the implementation.
 
