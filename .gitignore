@@ -1,2 +1,20 @@
-API Key.md
+# Obsidian
 .obsidian/
+API Key.md
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.webp
+*.bmp
+*.tiff
+*.ico
+
+# PDFs
+*.pdf
+
+# macOS
+.DS_Store

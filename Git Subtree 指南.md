@@ -37,7 +37,7 @@ git subtree add --prefix=notes-from-PC FYP_PC markdown-only  --squash
   **日常同步**
 
   **在 repo-a 更新内容的时候**
-git subtree split --prefix=markdown -b markdown-only                     git push origin markdown-only --force
+git subtree split --prefix=markdown -b markdown-only       git push origin markdown-only --force
 
   **从 repo-a 拉取最新内容到仓库C：**
 git subtree pull --prefix=notes-from-pi FYP_rasp markdown-only  --squash   
