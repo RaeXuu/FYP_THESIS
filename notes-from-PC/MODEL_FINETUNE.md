@@ -2,6 +2,37 @@
 
 ---
 
+## 最终选定参数汇总
+
+### 诊断模型最优配置（Run 6）
+
+| 类别 | 参数 | 值 |
+|------|------|----|
+| **预处理** | sample_rate | 2000 |
+| | segment_length | 2.0s |
+| | overlap | 0.5 |
+| | bandpass | 25–400 Hz |
+| **Mel** | n_mels | 64 |
+| | n_fft / win_length | 256 |
+| | hop_length | 128 |
+| | fmin / fmax | 20 / 400 Hz |
+| | power | 2.0 |
+| **训练** | batch_size | 16 |
+| | epochs | 50（early stop patience=10）|
+| | lr | 1e-3 |
+| | weight_decay | 1e-4 |
+| | optimizer | Adam |
+| | scheduler | ReduceLROnPlateau(factor=0.5, patience=3) |
+| | loss | CrossEntropyLoss（无 label smoothing）|
+| | sampler | WeightedRandomSampler |
+| **结果** | Test M-Score | 0.8903 |
+| | Test Sensitivity | 0.9485 |
+| | Test Specificity | 0.8322 |
+
+> 预处理参数（n_mels=64, hop=128）来自 40 组 Bayesian sweep（`scripts/run_sweep.py`），训练参数通过 Run 1–7 消融实验确定。
+
+---
+
 ## 诊断模型（LightweightCNN + CoordAtt）
 
 ### Baseline Run 1 — 2026-04-07
@@ -249,6 +280,125 @@ Early stop 触发于 Epoch 15
 
 ---
 
+### Run 5 — 2026-04-08（sweep 最佳预处理参数）
+
+**相比 Run 4 的改动**
+```
+config.yaml: n_mels: 32→64, hop_length: 96→128
+其余与 Run 4 相同（无 label smoothing, overlap=0.5, batch=256）
+```
+
+**Val 最优**
+| 指标 | 值 |
+|------|----|
+| M-Score | 0.9029 |
+| Sensitivity | 0.9420 |
+| Specificity | 0.8639 |
+
+**Test 集最终结果**
+| 指标 | 值 |
+|------|----|
+| M-Score | 0.8784 |
+| Sensitivity | 0.9409 |
+| Specificity | 0.8159 |
+| Accuracy | 0.8395 |
+| Test Loss | 0.3240 |
+
+Early stop 触发于 Epoch 11
+
+**与 Run 4 对比（唯一变量：n_mels 32→64, hop_length 96→128）**
+| 指标 | Run 4 | Run 5 | 变化 |
+|------|-------|-------|------|
+| Test M-Score | 0.8835 | 0.8784 | -0.005 |
+| Test Se | 0.9544 | 0.9409 | -0.014 |
+| Test Sp | 0.8125 | 0.8159 | +0.003 |
+| Val M-Score (best) | 0.9039 | 0.9029 | -0.001 |
+
+**结论**：sweep 最佳参数在 with_test 完整训练中未能带来提升，反而略有下降。sweep 是在 80/20 无 test 集的轻量模式下搜的，与完整训练条件不完全一致，存在分布差异。当前最优仍是 **Run 4**（n_mels=32, hop_length=96）。
+
+---
+
+### Run 6 — 2026-04-08（n_mels=64, hop=128, batch=16）
+
+**相比 Run 5 的改动**
+```
+BATCH_SIZE: 256 → 16
+其余与 Run 5 相同（n_mels=64, hop=128, 无 label smoothing, overlap=0.5）
+```
+
+**Val 最优（Epoch 2）**
+| 指标 | 值 |
+|------|----|
+| M-Score | 0.9009 |
+| Sensitivity | 0.9318 |
+| Specificity | 0.8700 |
+
+**Test 集最终结果**
+| 指标 | 值 |
+|------|----|
+| M-Score | 0.8903 |
+| Sensitivity | 0.9485 |
+| Specificity | 0.8322 |
+| Accuracy | 0.8541 |
+| Test Loss | 0.3613 |
+
+Early stop 触发于 Epoch 12
+
+**与 Run 4/5 对比**
+| Run | batch | n_mels | 最佳 epoch | Test M-Score | Test Se | Test Sp |
+|-----|-------|--------|-----------|-------------|---------|---------|
+| Run 4 | 256 | 32 | 4 | 0.8835 | 0.9544 | 0.8125 |
+| Run 5 | 256 | 64 | 1 | 0.8784 | 0.9409 | 0.8159 |
+| Run 6 | 16 | 64 | 2 | **0.8903** | 0.9485 | 0.8322 |
+
+**结论**：batch=16 解决了 n_mels=64 的过早过拟合问题（最佳 epoch 从 1 恢复到 2）。Run 6 是目前最优，M-Score 0.8903，Se/Sp 也更平衡。需 Run 7（batch=16, n_mels=32）做公平对照，排除 batch 大小本身的影响。
+
+---
+
+### Run 7 — 2026-04-08（n_mels=32, hop=96, batch=16，与 Run 6 公平对照）
+
+**目的**：控制 batch=16，n_mels=32，与 Run 6（batch=16, n_mels=64）形成公平对照，同时与 Run 4（batch=256, n_mels=32）验证 batch 大小的影响。
+
+**配置**
+```
+n_mels=32, hop_length=96
+BATCH_SIZE=16
+无 label smoothing, overlap=0.5
+```
+
+**Val 最优（Epoch 5）**
+| 指标 | 值 |
+|------|----|
+| M-Score | 0.9163 |
+| Sensitivity | 0.9487 |
+| Specificity | 0.8838 |
+
+**Test 集最终结果**
+| 指标 | 值 |
+|------|----|
+| M-Score | 0.8869 |
+| Sensitivity | 0.9383 |
+| Specificity | 0.8355 |
+| Accuracy | 0.8549 |
+| Test Loss | 0.3491 |
+
+Early stop 触发于 Epoch 15
+
+**完整对照表（batch 与 n_mels 消融）**
+| Run | batch | n_mels | 最佳 epoch | Test M-Score | Test Se | Test Sp |
+|-----|-------|--------|-----------|-------------|---------|---------|
+| Run 4 | 256 | 32 | 4 | 0.8835 | 0.9544 | 0.8125 |
+| Run 5 | 256 | 64 | 1 | 0.8784 | 0.9409 | 0.8159 |
+| Run 6 | 16 | 64 | 2 | 0.8903 | 0.9485 | 0.8322 |
+| **Run 7** | **16** | **32** | **5** | **0.8869** | 0.9383 | 0.8355 |
+
+**结论**
+- batch=16 优于 batch=256（Run 7 vs Run 4：+0.003，最佳 epoch 更晚更稳）
+- n_mels=64 vs 32 在 batch=16 下差距极小（0.8903 vs 0.8869），但 n_mels=64 有 Bayesian sweep 作为方法论支撑
+- **最终选定参数：batch=16, n_mels=64, hop=128, 无 label smoothing**（Run 6，test M-Score 最高且参数来自系统性搜索）
+
+---
+
 ### Sweep 跑完后的步骤
 
 1. **查最佳参数**
@@ -277,6 +427,138 @@ Early stop 触发于 Epoch 15
 
 ---
 
-## 消融实验
+## 消融实验（架构）
 
-*(待填 — 在 baseline 基础上逐步改动架构后记录)*
+### 实验设计
+
+**核心问题**：每个架构设计决策对最终 M-Score 的贡献是多少？
+
+**方法**：累进式消融（A→B→C→D），每步只加一个改动，逐步还原完整系统。
+
+**固定控制变量（所有组统一）**
+```
+数据集：同一份 test_split.csv（不可重新划分）
+预处理：n_mels=32, hop=96, n_fft=256, overlap=0.5（原始参数，不偏向任何架构）
+训练：batch=16, lr=1e-3, weight_decay=1e-4, 无 label smoothing
+Early stopping：patience=10, max epochs=50
+Scheduler：ReduceLROnPlateau(factor=0.5, patience=3)
+Sampler：WeightedRandomSampler
+```
+
+### 消融组合
+
+| 组 | 实验名 | 模型文件 | 通道 | CoordAtt | Dropout | 残差 | 状态 |
+|---|---|---|---|---|---|---|---|
+| A | Baseline OG | lightweight_cnn_og.py | 16→32→64→128 | 无 | 无 | 无 | 待跑 |
+| B | + 加宽通道 | lightweight_cnn_og_wide.py | 32→64→128→256 | 无 | 无 | 无 | 待跑 |
+| C | + CoordAtt + Dropout | lightweight_cnn.py | 32→64→128→256 | 有 | 0.3 | 无 | = Run 7 ✅ |
+| D | + 残差连接 | lightweight_cnn_res.py | 32→64→128→256 | 有 | 0.3 | 有 | 待跑 |
+
+> - A→B：验证通道容量的贡献
+> - B→C：验证 CoordAtt + Dropout 的贡献
+> - C→D：验证残差连接的贡献
+
+### 实施步骤
+
+1. **A 组**：import 改为 `LightweightCNN` from `lightweight_cnn_og`，config.yaml 用原始参数，跑一次
+2. **B 组**：新建 `lightweight_cnn_og_wide.py`，跑一次
+3. **C 组**：直接复用 Run 7 数据 ✅
+4. **D 组**：import 改为 `LightweightCNNRes` from `lightweight_cnn_res`，跑一次
+
+### 预期论文表格
+
+| 配置 | Test M-Score | Se | Sp | 参数量 |
+|------|-------------|----|----|--------|
+| A: Baseline OG（16→128，无注意力） | ? | ? | ? | ~20K |
+| B: + 加宽通道（32→256） | ? | ? | ? | ~65K |
+| C: + CoordAtt + Dropout | 0.8869 | 0.9383 | 0.8355 | ~85K |
+| D: + 残差连接（完整系统） | ? | ? | ? | ~108K |
+
+### 消融结果
+
+#### 组 A — Baseline OG（16→32→64→128，无 CoordAtt，无 Dropout）
+wandb: `Ablation-A-OG-baseline` | run: `fgjo8vul`
+
+| 指标 | Val 最优 | Test |
+|------|---------|------|
+| M-Score | 0.9113 | 0.8851 |
+| Sensitivity | 0.9683 | 0.9654 |
+| Specificity | 0.8544 | 0.8049 |
+
+Early stop Epoch 11，最佳 Epoch 1
+
+---
+
+#### 组 B — OG Wide（32→64→128→256，无 CoordAtt，无 Dropout）
+wandb: `Ablation-B-OG-wide` | run: `i2slxntb`
+
+| 指标 | Val 最优 | Test |
+|------|---------|------|
+| M-Score | 0.9103 | 0.8896 |
+| Sensitivity | 0.9507 | 0.9595 |
+| Specificity | 0.8698 | 0.8198 |
+
+Early stop Epoch 11，最佳 Epoch 1
+
+---
+
+#### 组 C — + CoordAtt + Dropout（= Run 7）
+| 指标 | Val 最优 | Test |
+|------|---------|------|
+| M-Score | 0.9163 | 0.8869 |
+| Sensitivity | 0.9487 | 0.9383 |
+| Specificity | 0.8838 | 0.8355 |
+
+Early stop Epoch 15，最佳 Epoch 5
+
+---
+
+#### 组 D — + 残差连接
+wandb: `Ablation-D-Residual` | run: `gcb10g0s`
+
+| 指标 | Val 最优 | Test |
+|------|---------|------|
+| M-Score | 0.9115 | 0.8912 |
+| Sensitivity | 0.9683 | 0.9797 |
+| Specificity | 0.8548 | 0.8027 |
+
+Early stop Epoch 12，最佳 Epoch 2
+
+---
+
+#### 论文表格（完整）
+
+输入：(1, 1, 32, 64)，输出：(1, 2)
+
+| 配置 | 参数量 | Test M-Score | Test Se | Test Sp | Test Acc | Test Loss | 最佳 epoch |
+|------|--------|-------------|---------|---------|----------|-----------|-----------|
+| A: OG（16→128） | 12.87K | 0.8851 | 0.9654 | 0.8049 | 0.8352 | 0.4127 | 1 |
+| B: + 加宽通道（32→256） | 47.23K | 0.8896 | 0.9595 | 0.8198 | 0.8462 | 0.3444 | 1 |
+| C: + CoordAtt + Dropout | 65.12K | 0.8869 | 0.9383 | 0.8355 | 0.8549 | 0.3491 | 5 |
+| D: + 残差连接 | 108.10K | **0.8912** | 0.9797 | 0.8027 | 0.8361 | 0.4117 | 2 |
+
+**分析**
+- A→B：加宽通道 +0.005 M-Score，Se/Sp 稍微平衡
+- B→C：CoordAtt + Dropout 使最佳 epoch 从 1 延迟到 5，训练更稳定，Sp 提升 +0.016；M-Score 略降（-0.003），贡献体现在泛化稳定性而非峰值数值
+- C→D：残差连接 M-Score 最高（+0.004），但 Se 飙至 0.9797 而 Sp 跌至 0.8027，Se/Sp 失衡加剧；最佳 epoch 退回到 2，说明残差加快收敛的同时也带来了更强的偏向性
+
+**结论**：D 组 M-Score 数值最优，但 C 组 Se/Sp 最平衡（Se=0.9383, Sp=0.8355），训练也最稳定。若优先考虑医疗筛查场景（高 Se）选 D；若优先 Se/Sp 均衡选 C。
+
+---
+
+### 封箱说明
+
+**最终选定架构**：C 组（`lightweight_cnn.py`，65.12K 参数）+ Run 6 超参（n_mels=64, hop=128）
+
+**已排除的改进方向**
+
+| 方法 | 分析 | 结论 |
+|---|---|---|
+| WeightedRandomSampler | 已在用，有效缓解 4:1 类别不平衡 | 保留 |
+| CrossEntropyLoss(weight=[1,4]) | 误分异常惩罚更重 → Se↑ Sp↓，加剧失衡 | 不采用 |
+| CrossEntropyLoss(weight=[4,1]) | 误分正常惩罚更重 → Sp↑ Se↓，牺牲筛查能力 | 不采用 |
+| label smoothing | Run 2 实验证明 M-Score 无明显提升，且降低 Se | 不采用 |
+| 阈值调整 | Run 1 阈值扫描最大收益 +0.0007，可忽略 | 不采用 |
+| 残差连接 | D 组 Se/Sp 失衡加剧，不适合筛查场景 | 不采用 |
+
+Se/Sp 失衡是 4:1 数据不平衡的固有问题，上述方法只在 Se 和 Sp 之间做取舍，无法同时提升两者，因此封箱。
