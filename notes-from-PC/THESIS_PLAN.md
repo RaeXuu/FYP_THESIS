@@ -266,6 +266,6 @@ Test集：训练结束后加载最优模型跑一次，输出 M-Score
 
 ### Pi 端评估
 - [ ] Pi 上跑 `benchmark.py` 采延迟/资源数据
-- [ ] Pi 上跑 `scripts/evaluate_tflite.py` 采准确率数据（FP32 vs INT8）
+- [ ] Pi 上跑 `evaluate.py` 采准确率数据（FP32 vs INT8）
 - [ ] FP32 模型在训练端跑出准确率，与 Pi INT8 结果对比
 
