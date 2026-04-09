@@ -36,6 +36,8 @@ The SQA model requires a quality-labelled dataset separate from the diagnostic l
 
 The resulting dataset contains 3,240 recordings: 2,876 Good Quality (88.8%) and 364 Bad Quality (11.2%), an approximately 8:1 imbalance. The same 80/10/10 recording-level split strategy is applied, with augmentation enabled only on the training split.
 
+For training, the labels are inverted relative to the raw annotation: Bad Quality is assigned label 1 (positive class) and Good Quality label 0. This inversion ensures that Sensitivity, as computed by M-Score, measures the Bad Quality detection rate—the operationally critical quantity, since undetected bad-quality segments propagate noise into the diagnostic model. All SQA Se/Sp figures reported in Chapter 5 follow this convention.
+
 ### 3.4 Data Augmentation and Class Balancing
 - WeightedRandomSampler 策略
 - 数据增强方法
@@ -217,7 +219,31 @@ The optimal threshold (0.45) improves M-Score by only 0.0007 over the default 0.
 ### 5.3 SQA Model Results
 - 训练结果（Test M-Score / Se / Sp）
 
-> *(待填 — SQA 模型训练完成后补充 Test M-Score / Se / Sp / Accuracy，以及与诊断模型训练设置的对比说明)*
+The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K parameters) and training hyperparameters as the final diagnostic model (batch = 16, lr = 1×10⁻³, early stopping patience = 10). The dataset is `metadata_quality_reversed.csv` (3,240 recordings, Bad:Good = 364:2,876), split 80/10/10 by recording, yielding 54,842 training, 6,536 validation, and 6,726 test segments. Preprocessing uses the final configuration (n\_mels = 64, hop = 128).
+
+**Table 5.6: SQA model (Run 1) — validation M-Score across training epochs.**
+
+| Epoch | Val Se (Bad) | Val Sp (Good) | Val M-Score |
+|:-----:|:------------:|:-------------:|:-----------:|
+| 1 | 0.7409 | 0.8592 | 0.8000 |
+| 3 | 0.7263 | 0.8826 | 0.8044 |
+| 9 | 0.7172 | 0.9036 | 0.8104 |
+| **12** | **0.7281** | **0.9050** | **0.8165** ← best |
+| 22 | 0.6825 | 0.9377 | 0.8101 (early stop) |
+
+**Table 5.7: SQA model test results vs diagnostic model.**
+
+| Metric | Diagnostic Model (Run 6) | SQA Model (Run 1) |
+|--------|:------------------------:|:-----------------:|
+| Test M-Score | 0.8903 | 0.8046 |
+| Test Se | 0.9485 | 0.7173 |
+| Test Sp | 0.8322 | 0.8919 |
+| Test Accuracy | 0.8541 | 0.8794 |
+| Class imbalance | 4:1 | 8:1 |
+
+The SQA model achieves Sp = 0.8919, meaning approximately 10.8% of good-quality recordings are incorrectly rejected—an acceptable throughput reduction. The principal concern is Se = 0.7173: 28.3% of bad-quality segments are not flagged by the gate and pass through to the diagnostic model. Validation M-Score fluctuated noticeably across epochs (0.78–0.82), a sign of unstable training under the more extreme 8:1 class imbalance. The high test accuracy (0.8794) reflects majority-class dominance and is not a meaningful indicator here.
+
+> *(SQA Run 2 训练中，使用 class\_weight=[1,8] + lr=5×10⁻⁴ + scheduler patience=5，结果出来后补充对比。)*
 
 ### 5.4 Ablation Study
 - Baseline CNN（无注意力）
