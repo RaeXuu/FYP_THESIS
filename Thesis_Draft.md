@@ -2,6 +2,28 @@
 
 ---
 
+## TODO
+
+### 需要跑数据才能填的表格
+- [ ] **Table 5.5** — FP32 vs INT8 对比（model size / M-Score / Se / Sp / latency）→ 跑 `evaluate.py`（FP32 和 INT8 均在 Pi 上跑）
+- [ ] **Table 6.1** — 各阶段推理延迟（bandpass / Mel / SQA / diagnostic，FP32 vs INT8）→ 跑 `benchmark.py`
+- [ ] **Table 6.2** — 资源占用（Peak CPU % / RSS MB / FP32 model size）→ 跑 `benchmark.py`
+- [ ] **Table 6.3** — 量化精度对比（M-Score / Se / Sp / Accuracy，FP32 vs INT8）→ 跑 `evaluate.py`
+
+### 需要补充的引用
+- [ ] **[CITE PhysioNet 2016]** — Section 3.1
+- [ ] **[CITE Howard et al., MobileNets, 2017]** — Section 4.2
+- [ ] **[CITE Hou et al., CVPR 2021]** — Section 4.3（CoordAtt）
+- [ ] **[CITE Hu et al., CVPR 2018]** — Section 4.3（SE block）
+
+### 需要写的章节
+- [ ] **Chapter 7** — Conclusion（7.1 Summary of Contributions / 7.2 Limitations / 7.3 Future Work）
+
+### 写完后清理
+- [ ] 删除各节开头的中文 bullet note（规划时留下的，正文已写完可删）
+
+---
+
 ## Chapter 3: Dataset and Preprocessing
 
 ### 3.1 Dataset Overview
@@ -109,7 +131,8 @@ CoordAtt retains positional information by decomposing spatial pooling along the
 
 2. **Joint encoding.** **X**_h and **X**_w (transposed to align the spatial dimension) are concatenated along the height axis and passed through a shared 1×1 convolution followed by BatchNorm and ReLU. The intermediate channel dimension is m = max(8, ⌊C/16⌋), giving m = 8, 8, 16 for C = 64, 128, 256 at layers 2, 3, 4 respectively.
 
-3. **Attention map generation.** The encoded tensor is split back into height- and width-specific components. Each is projected by a separate 1×1 convolution and sigmoid to produce **a**_h ∈ [0,1]^{N×C×H×1} and **a**_w ∈ [0,1]^{N×C×1×W}.
+3. **Attention map generation.** The encoded tensor is split back into height- and width-specific components. Each is projected by a separate 1×1 convolution and sigmoid to produce 
+**a**_h ∈ [0,1]^{N×C×H×1} and **a**_w ∈ [0,1]^{N×C×1×W}.
 
 4. **Recalibration.** The output is **X** · **a**_h · **a**_w. Because **a**_h varies along the frequency axis and **a**_w varies along the time axis, their elementwise product creates a 2D attention map that weights each spatial location according to both frequency and temporal position—without collapsing either axis.
 
@@ -123,7 +146,7 @@ The SQA model is architecturally identical to the diagnostic model: the same fou
 
 Sharing the architecture with the diagnostic model has a practical benefit beyond simplicity: both models are quantized, loaded, and executed under the same TFLite inference pipeline on the Raspberry Pi, with no additional engineering required to accommodate a structurally different gating network.
 
-At inference time, the SQA model processes the same 1×32×64 log-Mel input as the diagnostic model. A segment whose SQA output probability falls below 0.5 is discarded without invoking the diagnostic model, saving one full forward pass per rejected segment and preventing acoustically degraded input from reaching the classification stage.
+At inference time, the SQA model processes the same 1×32×64 log-Mel input as the diagnostic model. Rather than applying a binary accept/reject threshold, the SQA output probability P(Good) for each segment is used directly as a continuous weight in the final aggregation step. Across a recording session, the diagnostic model's predicted Abnormal probability for each segment is weighted by its corresponding P(Good) score and averaged to produce the final diagnostic decision. Segments of low acoustic quality therefore contribute less to the final result rather than being hard-rejected, which avoids discarding borderline-quality segments entirely while still down-weighting their influence. This design eliminates the need for threshold tuning on the SQA output: the continuous probability is itself the operationally useful quantity.
 
 ### 4.5 Model Quantization
 - FP32 → INT8 量化方案（Post-Training Quantization）
@@ -219,9 +242,9 @@ The optimal threshold (0.45) improves M-Score by only 0.0007 over the default 0.
 ### 5.3 SQA Model Results
 - 训练结果（Test M-Score / Se / Sp）
 
-The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K parameters) and training hyperparameters as the final diagnostic model (batch = 16, lr = 1×10⁻³, early stopping patience = 10). The dataset is `metadata_quality_reversed.csv` (3,240 recordings, Bad:Good = 364:2,876), split 80/10/10 by recording, yielding 54,842 training, 6,536 validation, and 6,726 test segments. Preprocessing uses the final configuration (n\_mels = 64, hop = 128).
+The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K parameters) and training hyperparameters as the final diagnostic model (batch = 16, early stopping patience = 10). The dataset is `metadata_quality_reversed.csv` (3,240 recordings, Bad:Good = 364:2,876), split 80/10/10 by recording, yielding 54,842 training, 6,536 validation, and 6,726 test segments. Preprocessing uses the final configuration (n\_mels = 64, hop = 128). Three training runs were conducted to progressively address the Se deficit caused by the more severe 8:1 class imbalance.
 
-**Table 5.6: SQA model (Run 1) — validation M-Score across training epochs.**
+**Table 5.6: SQA model — validation M-Score across training epochs (Run 1 baseline).**
 
 | Epoch | Val Se (Bad) | Val Sp (Good) | Val M-Score |
 |:-----:|:------------:|:-------------:|:-----------:|
@@ -231,19 +254,35 @@ The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K par
 | **12** | **0.7281** | **0.9050** | **0.8165** ← best |
 | 22 | 0.6825 | 0.9377 | 0.8101 (early stop) |
 
-**Table 5.7: SQA model test results vs diagnostic model.**
+**Run 1** (lr = 1×10⁻³, CrossEntropyLoss, dropout = 0.3) establishes the baseline. Validation M-Score oscillates noticeably across epochs (0.78–0.82), a sign of unstable training under the 8:1 imbalance. Test Se = 0.7173: 28.3% of bad-quality segments pass through to the diagnostic model undetected.
 
-| Metric | Diagnostic Model (Run 6) | SQA Model (Run 1) |
+**Run 2** adds an explicit class weight of [1, 8] to the loss function and reduces the learning rate to 5×10⁻⁴ (scheduler patience raised from 3 to 5). The loss weighting directly penalises missed Bad-class predictions more heavily. Val oscillation narrows (0.80–0.83), and test Se improves to 0.7651 (+0.048). Sp drops to 0.8554 as expected from the stronger minority-class bias.
+
+**Run 3** increases dropout from 0.3 to 0.5, retaining all other Run 2 changes. The heavier regularisation reduces overfitting on the small Bad-class population: test Se reaches 0.8274 (+0.062 over Run 2), and the train/val loss gap narrows. The best validation checkpoint now appears at Epoch 2—earlier convergence than Run 2—after which M-Score declines monotonically to early-stop at Epoch 12. Run 3 is selected as the final SQA model.
+
+**Table 5.7: SQA model — three-run progression.**
+
+| Metric | Run 1 | Run 2 | **Run 3 (final)** | Run 1→3 change |
+|--------|:-----:|:-----:|:-----------------:|:--------------:|
+| Test M-Score | 0.8046 | 0.8102 | **0.8152** | +0.011 |
+| Test Se (Bad) | 0.7173 | 0.7651 | **0.8274** | +0.110 |
+| Test Sp (Good) | 0.8919 | 0.8554 | 0.8029 | −0.089 |
+| Test Accuracy | 0.8794 | 0.8489 | 0.8046 | — |
+| Best Val Se | 0.7281 | 0.8120 | 0.8759 | +0.148 |
+| Val→Test Se gap | −0.011 | −0.047 | −0.048 | stable ~0.05 |
+| Early stop epoch | 22 | 22 | 12 | faster |
+
+**Table 5.8: Final SQA model (Run 3) vs diagnostic model.**
+
+| Metric | Diagnostic Model (Run 6) | SQA Model (Run 3) |
 |--------|:------------------------:|:-----------------:|
-| Test M-Score | 0.8903 | 0.8046 |
-| Test Se | 0.9485 | 0.7173 |
-| Test Sp | 0.8322 | 0.8919 |
-| Test Accuracy | 0.8541 | 0.8794 |
+| Test M-Score | 0.8903 | 0.8152 |
+| Test Se | 0.9485 | 0.8274 |
+| Test Sp | 0.8322 | 0.8029 |
+| Test Accuracy | 0.8541 | 0.8046 |
 | Class imbalance | 4:1 | 8:1 |
 
-The SQA model achieves Sp = 0.8919, meaning approximately 10.8% of good-quality recordings are incorrectly rejected—an acceptable throughput reduction. The principal concern is Se = 0.7173: 28.3% of bad-quality segments are not flagged by the gate and pass through to the diagnostic model. Validation M-Score fluctuated noticeably across epochs (0.78–0.82), a sign of unstable training under the more extreme 8:1 class imbalance. The high test accuracy (0.8794) reflects majority-class dominance and is not a meaningful indicator here.
-
-> *(SQA Run 2 训练中，使用 class\_weight=[1,8] + lr=5×10⁻⁴ + scheduler patience=5，结果出来后补充对比。)*
+The persistent Val→Test Se gap of approximately 0.048 across Runs 2 and 3 indicates that the generalisation ceiling is constrained by the small Bad-class population (364 recordings total; roughly 36 recordings in the test split), rather than by the training configuration. Further Se improvement would require additional bad-quality data. The Sp of 0.8029 means approximately 20% of good-quality recordings receive a lower P(Good) weight in the inference aggregation; this reduces effective signal volume but does not introduce noise into the diagnostic stage, and is considered acceptable given the deployment context.
 
 ### 5.4 Ablation Study
 - Baseline CNN（无注意力）
@@ -294,27 +333,133 @@ To quantify the contribution of each architectural component, four model variant
 ## Chapter 6: Edge Deployment
 
 ### 6.1 System Architecture Overview
-- ESP32 → BLE → Raspberry Pi 4B 整体数据流
-- 各模块分工
+
+The deployed system consists of two physical units: an ESP32-based acquisition device and a Raspberry Pi 4B inference station, communicating exclusively over Bluetooth Low Energy (BLE). The separation of concerns between the two units is deliberate: the ESP32 handles only signal capture and wireless transmission, keeping its firmware simple and power-efficient, while all computation-intensive processing—filtering, feature extraction, and model inference—runs on the Pi.
+
+```
+┌─────────────────────────────────┐
+│          ESP32 (acquisition)     │
+│                                  │
+│  Microphone → ADC → PCM buffer   │
+│  → BLE GATT notification (128 B) │
+└────────────────┬────────────────┘
+                 │  BLE 2.4 GHz
+┌────────────────▼────────────────┐
+│     Raspberry Pi 4B (inference)  │
+│                                  │
+│  BLE rx → preprocess → SQA →     │
+│  diagnostic → weighted average   │
+│  → result storage + display      │
+└────────────────┬────────────────┘
+                 │  I2C / GPIO
+┌────────────────▼────────────────┐
+│   Peripherals                    │
+│   OLED × 2 │ button │ LED        │
+└─────────────────────────────────┘
+```
+
+**ESP32 (acquisition side).** An analogue electret microphone feeds a signal conditioning amplifier whose output connects to ESP32 ADC pin GPIO34. The ADC samples at 2,000 Hz with 12-bit resolution; samples are cast to 16-bit signed PCM (little-endian) and placed into a ping-pong double buffer to avoid sampling gaps during BLE transmission. The double-buffer arrangement decouples the 2 kHz sampling timer from the BLE stack: one buffer fills while the other is transmitted, ensuring no samples are dropped at the boundaries of BLE notification packets. Each notification carries 128 bytes (64 samples), giving one packet every 32 ms at the operating sample rate. The ESP32 runs a GATT server exposing a single custom notify characteristic (UUID `beb5483e-36e1-4688-b7f5-ea07361b26a8`); after disconnect it immediately restarts advertisement, making reconnection transparent to the user.
+
+**Raspberry Pi 4B (inference side).** The Pi runs a single asyncio event loop (`main_pi.py`) that manages BLE reception, preprocessing, inference, storage, and UI updates concurrently without multi-threading. A `bleak` BLE client subscribes to ESP32 notifications; received bytes accumulate in a bytearray ring buffer. Once 8,000 bytes (4,000 samples = 2 seconds of audio) have arrived, the segment is passed synchronously through the full preprocessing and inference pipeline (described in Section 6.2). The inference result triggers OLED updates and, for Abnormal outcomes, automatic raw audio archival. A background asyncio task refreshes the system-status display every 2 seconds independently of the inference cycle.
 
 ### 6.2 Real-Time Inference Pipeline
-- BLE 数据接收与缓冲
-- 滑动窗口推理流程（SQA 过滤 + 诊断 + 加权平均）
-- 采集策略（3 次 × 2s，间隔 30s）
+
+**Acquisition protocol.** Each diagnostic session consists of three fixed-length 2-second recordings separated by 30-second rest intervals (NUM\_COLLECTIONS = 3, COLLECTION\_INTERVAL = 30 s). The rest interval allows the user to reposition the stethoscope head between recordings and for residual motion artefacts from the previous placement to decay. Three recordings are used rather than one continuous stream because cardiac auscultation requires consistent probe contact; a single long recording is more likely to contain motion-corrupted windows, while multiple short recordings at stable positions improve the signal-to-noise ratio of the aggregated result.
+
+**Preprocessing on-device.** Each 2-second PCM segment (4,000 int16 samples) is converted to float32 by dividing by 32,768. The same preprocessing pipeline used during training is then applied: a 5th-order Butterworth bandpass filter (25–400 Hz, zero-phase), followed by log-Mel spectrogram extraction (n\_mels = 64, n\_fft = 256, hop = 128, fmin = 20 Hz, fmax = 400 Hz, power 2.0). The resulting 2D feature map is reshaped to tensor shape (1, 1, 64, 128) for TFLite input.
+
+**Cascaded TFLite inference.** Each segment is processed by two INT8 quantized TFLite models loaded at startup. The SQA model runs first, producing a Good-Quality probability P(Good) ∈ [0, 1]. The diagnostic model then runs on the same input, producing an Abnormal probability P(Abnormal). No hard SQA threshold is applied; instead, the P(Good) score for each segment is used directly as a weight in the final aggregation. Across the three segments of a session, the final diagnostic score is:
+
+$$\text{score} = \frac{\sum_{i} P(\text{Good})_i \cdot P(\text{Abnormal})_i}{\sum_{i} P(\text{Good})_i}$$
+
+This weighted average down-weights acoustically degraded segments without discarding them entirely, and degrades gracefully when all segments have low quality (in which case the system reports a noise result rather than an unreliable diagnosis). The final label is Normal if score < 0.5, Abnormal otherwise.
+
+**Data flow summary.**
+
+```
+BLE notification (128 B) → accumulate in ring buffer
+→ 8000 bytes complete (= 2 s segment)
+→ int16 → float32 normalisation
+→ bandpass filter (Butterworth 25–400 Hz)
+→ log-Mel spectrogram (64 × 128)
+→ reshape to (1, 1, 64, 128)
+→ SQA TFLite → P(Good)
+→ Diagnostic TFLite → P(Abnormal)
+→ accumulate (weight, score) pairs
+→ after 3 segments: weighted average → final label
+→ OLED update + optional audio archive
+```
 
 ### 6.3 Performance Evaluation
-- 推理延迟（各阶段：带通滤波 / Mel / SQA / 诊断）
-- CPU 与内存占用
-- 实时性验证
+
+This section reports inference latency, resource utilisation, and quantization accuracy on the Raspberry Pi 4B ARM Cortex-A72. All measurements are taken on-device using `benchmark.py` and `evaluate.py`.
+
+**Table 6.1: Per-stage inference latency on Pi 4B (single 2-second segment, median of 100 runs).**
+
+| Stage | FP32 (ms) | INT8 (ms) |
+|-------|:---------:|:---------:|
+| Bandpass filter | *(待填)* | — |
+| Log-Mel spectrogram | *(待填)* | — |
+| SQA model | *(待填)* | *(待填)* |
+| Diagnostic model | *(待填)* | *(待填)* |
+| **Total per segment** | *(待填)* | *(待填)* |
+
+**Table 6.2: Resource utilisation during a full 3-segment session.**
+
+| Metric | Value |
+|--------|:-----:|
+| Peak CPU utilisation | *(待填)* % |
+| Memory usage (RSS) | *(待填)* MB |
+| Model file size — SQA INT8 | 145.7 KB |
+| Model file size — Diagnostic INT8 | 145.7 KB |
+| Model file size — FP32 (each) | *(待填)* KB |
+
+**Realtime constraint.** Each 2-second segment must be fully processed before the next segment is complete, i.e., total per-segment latency must remain under 2,000 ms. At the ARM Cortex-A72 clock speed (1.5 GHz) and given the lightweight model size (65.12K parameters, 145.7 KB INT8), the inference budget is expected to be comfortably met. *(Confirmed values to be inserted from benchmark.py output.)*
+
+**Table 6.3: Quantization accuracy impact on Pi 4B (diagnostic model, test split).**
+
+| Metric | FP32 | INT8 | Change |
+|--------|:----:|:----:|:------:|
+| M-Score | *(待填)* | *(待填)* | *(待填)* |
+| Sensitivity | *(待填)* | *(待填)* | *(待填)* |
+| Specificity | *(待填)* | *(待填)* | *(待填)* |
+| Accuracy | *(待填)* | *(待填)* | *(待填)* |
+
+> *(待填 — 运行 benchmark.py 和 evaluate.py 后填入。Dynamic range quantization 仅静态量化权重，激活值运行时动态量化，延迟收益可能小于 full INT8 PTQ；若数据显示 speedup 有限，见 Section 4.5 中的说明。)*
 
 ### 6.4 User Interface
-- OLED 双屏设计（诊断主屏 + 系统状态副屏）
-- 物理按键交互逻辑
+
+The device is designed for unsupervised home use: a user without technical expertise must be able to start a measurement, monitor its progress, and read the result using only the physical controls and onboard displays.
+
+**Physical button.** A single tactile button on GPIO27 (internal pull-up, software debounce 20 ms) provides the sole user input. The interaction model is intentionally minimal:
+
+| Action | Effect |
+|--------|--------|
+| Short press (standby) | Start a diagnostic session (BLE connect → 3-segment acquisition) |
+| Short press (during session) | Abort current session |
+| Long press ≥ 3 s | Safe shutdown (OLED confirms → `sudo shutdown -h now`) |
+
+**Primary OLED (128×64, SSD1306).** Connected via hardware I2C (GPIO2/3, bus 1), this display presents diagnostic-facing information across three states:
+
+- *Standby:* Project name, team members, and supervisor; a heart icon blinks at 1 Hz. Prompts the user to press the button.
+- *Connecting:* "Connecting ESP32…" with a progress bar that fills over the BLE connection timeout and a live countdown in seconds.
+- *Running:* Upper half shows the current chunk number, window progress (e.g., Win: 05/09), and the running Normal probability for the active segment; lower half shows the result and confidence from the previous segment. A heart icon blinks on each valid inference window.
+
+**Secondary OLED (128×32, SSD1306).** Connected via software I2C (GPIO23/24, bus 4, configured via `dtoverlay=i2c-gpio`), this smaller display shows system health metrics (CPU usage, RAM utilisation, CPU temperature), refreshed every 2 seconds by a background asyncio task. It operates independently of the inference cycle and remains active throughout the session, allowing quick identification of resource pressure without interrupting the diagnostic display.
+
+Both displays use the `luma.oled` library. An internal `threading.Lock` in each display class prevents concurrent draw calls from corrupting the framebuffer when the inference callback and the background sysinfo task write simultaneously.
 
 ### 6.5 System Reliability
-- 软件看门狗机制
-- 异常恢复策略（BLE 断连重连、推理失败处理）
-- 安全关机
+
+Edge deployment introduces failure modes absent from server environments: intermittent BLE links, unclean power loss, and the absence of an operator to restart crashed processes. Three mechanisms address these.
+
+**Service auto-restart (systemd).** The inference application runs as a systemd unit (`heartbeat.service`) with `Restart=on-failure` and a 10-second restart delay. The service starts after `bluetooth.target` and `network.target`, ensuring the BLE stack is initialised before the application attempts to connect. On boot, the service starts automatically; after any unhandled exception the process is respawned without user intervention.
+
+**Software watchdog.** The main inference loop writes a heartbeat timestamp to `/tmp/heartbeat.ts` every 30 seconds. A separate lightweight watchdog process (`src/watchdog.py`, managed by `watchdog.service`) reads this file every 30 seconds; if the timestamp is more than 90 seconds old—indicating the main loop is frozen rather than merely idle—the watchdog restarts `heartbeat.service` via `systemctl restart`. The 90-second threshold is three times the heartbeat interval, tolerating transient delays from long BLE connection attempts without false positives.
+
+**BLE reconnection with exponential backoff.** If the BLE link drops mid-session, the client catches the `BleakDisconnectedError` and re-enters the connection loop using an exponential backoff schedule: 1 s → 2 s → 4 s, capped at 30 s. This prevents the client from hammering the BLE stack during transient RF interference while still recovering promptly from brief dropouts. The ESP32 side mirrors this: on disconnect it immediately restarts advertisement, so reconnection completes as soon as the Pi retries.
+
+**Safe shutdown.** SIGTERM and SIGINT are both caught by a signal handler that executes a graceful teardown sequence: stop BLE notifications → cancel pending asyncio tasks → flush log buffers → invoke `sudo shutdown -h now`. The same sequence is triggered by a 3-second button long press, giving the user a hardware-level shutdown path that does not risk SD card filesystem corruption from an abrupt power cut. During shutdown the primary OLED briefly displays "Shutting down…" to confirm the action was registered.
 
 ---
 
