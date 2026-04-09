@@ -233,14 +233,16 @@ Test集：训练结束后加载最优模型跑一次，输出 M-Score
 
 ## 需要补的实验数据
 
-| 实验 | 工具 | 在哪跑 |
-|------|------|--------|
-| 单窗口推理延迟（Mel / SQA / 诊断各阶段） | `benchmark.py` | Pi |
-| Chunk 总处理时间 vs 实时性验证 | `benchmark.py` | Pi |
-| CPU / 内存占用 | `benchmark.py` | Pi |
-| 模型文件大小（FP32 vs INT8） | `benchmark.py` | Pi |
-| 量化模型准确率（Accuracy / Sensitivity / Specificity / F1） | `evaluate.py` | Pi |
-| FP32 vs INT8 准确率对比 | 训练项目跑 FP32，Pi 跑 INT8 | 两边对比 |
+> 以下全部已完成，原始输出见 `evaluate_benchmark_result.md`。
+
+| 实验 | 工具 | 状态 |
+|------|------|------|
+| 单窗口推理延迟（Mel / SQA / 诊断各阶段） | `benchmark.py` | ✅ |
+| Chunk 总处理时间 vs 实时性验证 | `benchmark.py` | ✅ |
+| CPU / 内存占用 | `benchmark.py` | ✅ |
+| 模型文件大小（FP32 vs INT8） | `benchmark.py` | ✅ |
+| 量化模型准确率（Accuracy / Sensitivity / Specificity / F1） | `evaluate.py` | ✅ |
+| FP32 vs INT8 准确率对比 | `evaluate.py` | ✅（FP32 = INT8，无精度损失） |
 
 ---
 
@@ -262,10 +264,10 @@ Test集：训练结束后加载最优模型跑一次，输出 M-Score
 - [x] SQA Run-3 完成（dropout=0.5，Test Se=0.8274，M-Score=0.8152）**← 最终选定**
 - [x] 阈值扫描不需要：部署机制为加权平均，P(Good) 直接作为权重，无二值阈值
 - [x] 用 `scripts/convert_to_tflite.py` 将 Run-3 `best_model_sqa.pth` 转为 `.tflite`（FP32 + INT8）
-- [ ] 替换 Pi 上的四个 `.tflite` 文件（诊断 FP32/INT8 + SQA FP32/INT8）
+- [x] 替换 Pi 上的四个 `.tflite` 文件（诊断 FP32/INT8 + SQA FP32/INT8）
 
 ### Pi 端评估
-- [ ] Pi 上跑 `benchmark.py` 采延迟/资源数据
-- [ ] Pi 上跑 `evaluate.py` 采准确率数据（FP32 vs INT8）
-- [ ] FP32 模型在训练端跑出准确率，与 Pi INT8 结果对比
+- [x] Pi 上跑 `benchmark.py` 采延迟/资源数据
+- [x] Pi 上跑 `evaluate.py` 采准确率数据（FP32 vs INT8）
+- [x] FP32 模型在训练端跑出准确率，与 Pi INT8 结果对比（FP32 = INT8，无精度损失）
 
