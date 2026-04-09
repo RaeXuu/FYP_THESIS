@@ -1,5 +1,3 @@
- 你翻译一下下面的部分
- 
 2.3.3 Relevant Algorithm Theories                                                                                                                         
                                                                                                                                                             
   Depthwise Separable Convolution                                                                                                                           
@@ -35,8 +33,7 @@
   Signal Quality Assessment and Weighted Inference                                                                                                          
                                                                                                                                                          
   In real-world recording environments, heart sound signals are frequently contaminated by motion artefacts, breathing noise, and poor sensor contact,      
-  producing segments of degraded quality that can mislead a diagnostic model. A Signal Quality Assessment (SQA) module is therefore incorporated as a       
-  pre-filter in the inference pipeline.                                                                                                                     
+  producing segments of degraded quality that can mislead a diagnostic model. A Signal Quality Assessment (SQA) module is therefore incorporated as a pre-filter in the inference pipeline.                                                                                                                     
                                                                                                                                                             
   The SQA model shares the same LightweightCNN architecture as the diagnostic model and is trained on labelled quality annotations derived from the         
   PhysioNet 2016 dataset. It outputs a continuous probability $P(\text{Good})$ for each 2-second segment, representing the model's confidence that the      
