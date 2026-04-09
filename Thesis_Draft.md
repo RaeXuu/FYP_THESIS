@@ -401,11 +401,16 @@ This section reports inference latency, resource utilisation, and quantization a
 
 | Stage | FP32 (ms) | INT8 (ms) |
 |-------|:---------:|:---------:|
-| Bandpass filter | 2.24 | — |
-| Log-Mel spectrogram | 4.73 | — |
+| Bandpass filter | 2.24 | 2.24 |
+| Log-Mel spectrogram | 4.73 | 4.73 |
 | SQA model | 13.51 | 13.46 |
 | Diagnostic model | 13.44 | 13.43 |
 | **Total per segment** | **33.92** | **33.87** |
+
+The bandpass filter and Log-Mel spectrogram are implemented as NumPy operations and are not subject to TFLite quantization; their latency is identical across both configurations. Quantization reduces latency only for the two TFLite model stages, though the improvement is marginal (under 0.1 ms per stage) because dynamic range quantization quantizes weights statically but leaves activations at runtime float, yielding limited arithmetic speedup on the ARM Cortex-A72 compared to full integer quantization.
+
+**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs).**
+[Fig 6.2 — insert grouped bar chart: fig6_2_latency.pdf]
 
 **Table 6.2: Resource utilisation during a full 3-segment session.**
 
