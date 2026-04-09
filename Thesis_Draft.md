@@ -5,10 +5,10 @@
 ## TODO
 
 ### 需要跑数据才能填的表格
-- [ ] **Table 5.5** — FP32 vs INT8 对比（model size / M-Score / Se / Sp / latency）→ 跑 `evaluate.py`（FP32 和 INT8 均在 Pi 上跑）
-- [ ] **Table 6.1** — 各阶段推理延迟（bandpass / Mel / SQA / diagnostic，FP32 vs INT8）→ 跑 `benchmark.py`
-- [ ] **Table 6.2** — 资源占用（Peak CPU % / RSS MB / FP32 model size）→ 跑 `benchmark.py`
-- [ ] **Table 6.3** — 量化精度对比（M-Score / Se / Sp / Accuracy，FP32 vs INT8）→ 跑 `evaluate.py`
+- [x] **Table 5.5** — FP32 vs INT8 对比（model size / M-Score / Se / Sp / latency）
+- [x] **Table 6.1** — 各阶段推理延迟（bandpass / Mel / SQA / diagnostic，FP32 vs INT8）
+- [x] **Table 6.2** — 资源占用（Peak CPU % / RSS MB / FP32 model size）
+- [x] **Table 6.3** — 量化精度对比（M-Score / Se / Sp / Accuracy，FP32 vs INT8）
 
 ### 需要补充的引用
 - [ ] **[CITE PhysioNet 2016]** — Section 3.1
@@ -17,7 +17,12 @@
 - [ ] **[CITE Hu et al., CVPR 2018]** — Section 4.3（SE block）
 
 ### 需要写的章节
+- [ ] **Chapter 1** — Introduction（motivation、contribution list、chapter outline）
+- [ ] **Chapter 2** — Related Work（已有心音分类方法综述、Edge AI/TinyML、本文方法定位）
 - [ ] **Chapter 7** — Conclusion（7.1 Summary of Contributions / 7.2 Limitations / 7.3 Future Work）
+
+### 需要补充的对比内容
+- [ ] **SOTA 对比表** — 在 PhysioNet 2016 上与已发表方法横向对比（M-Score / Se / Sp / 参数量 / 部署设备）
 
 ### 写完后清理
 - [ ] 删除各节开头的中文 bullet note（规划时留下的，正文已写完可删）
@@ -318,13 +323,11 @@ To quantify the contribution of each architectural component, four model variant
 
 | Metric | FP32 | Quantized (Dynamic Range INT8) | Change |
 |--------|:----:|:------------------------------:|:------:|
-| Model size | *(待填)* KB | 145.7 KB | *(待填)* |
-| Test M-Score | *(待填)* | *(待填)* | *(待填)* |
-| Test Se | *(待填)* | *(待填)* | *(待填)* |
-| Test Sp | *(待填)* | *(待填)* | *(待填)* |
-| Inference latency (Pi 4B) | *(待填)* ms | *(待填)* ms | *(待填)* |
-
-> *(待填 — 运行 evaluate.py 和 benchmark.py 后补充。注意：此处使用 dynamic range quantization，权重 INT8 静态量化，激活值运行时动态量化，延迟收益可能小于 full INT8 PTQ，详见 Section 4.5。)*
+| Model size | 302.8 KB | 144.7 KB | −52.2% |
+| Test M-Score | 68.9% | 68.9% | 0.0% |
+| Test Se | 97.9% | 97.9% | 0.0% |
+| Test Sp | 40.0% | 40.0% | 0.0% |
+| Inference latency (Pi 4B) | 13.44 ms | 13.43 ms | −0.1% |
 
 > **Note for writing:** Dynamic range quantization only statically quantizes weights; activations are quantized at runtime per call. This means the latency reduction relative to FP32 may be modest compared to full INT8 quantization (where both weights and activations are fixed at INT8 and the hardware can execute true INT8 GEMM). If the benchmark shows limited speedup, this is the expected explanation—not a flaw in the implementation.
 
@@ -398,34 +401,32 @@ This section reports inference latency, resource utilisation, and quantization a
 
 | Stage | FP32 (ms) | INT8 (ms) |
 |-------|:---------:|:---------:|
-| Bandpass filter | *(待填)* | — |
-| Log-Mel spectrogram | *(待填)* | — |
-| SQA model | *(待填)* | *(待填)* |
-| Diagnostic model | *(待填)* | *(待填)* |
-| **Total per segment** | *(待填)* | *(待填)* |
+| Bandpass filter | 2.24 | — |
+| Log-Mel spectrogram | 4.73 | — |
+| SQA model | 13.51 | 13.46 |
+| Diagnostic model | 13.44 | 13.43 |
+| **Total per segment** | **33.92** | **33.87** |
 
 **Table 6.2: Resource utilisation during a full 3-segment session.**
 
 | Metric | Value |
 |--------|:-----:|
-| Peak CPU utilisation | *(待填)* % |
-| Memory usage (RSS) | *(待填)* MB |
-| Model file size — SQA INT8 | 145.7 KB |
-| Model file size — Diagnostic INT8 | 145.7 KB |
-| Model file size — FP32 (each) | *(待填)* KB |
+| Peak CPU utilisation | 1.3% |
+| Memory usage (RSS) | 249.9 MB |
+| Model file size — SQA INT8 | 144.7 KB |
+| Model file size — Diagnostic INT8 | 144.7 KB |
+| Model file size — FP32 (each) | 302.8 KB |
 
-**Realtime constraint.** Each 2-second segment must be fully processed before the next segment is complete, i.e., total per-segment latency must remain under 2,000 ms. At the ARM Cortex-A72 clock speed (1.5 GHz) and given the lightweight model size (65.12K parameters, 145.7 KB INT8), the inference budget is expected to be comfortably met. *(Confirmed values to be inserted from benchmark.py output.)*
+**Realtime constraint.** Each 2-second segment must be fully processed before the next segment is complete, i.e., total per-segment latency must remain under 2,000 ms. At the ARM Cortex-A72 clock speed (1.5 GHz) and given the lightweight model size (65.12K parameters, 144.7 KB INT8), the total per-segment latency of 33.9 ms satisfies the real-time constraint with a margin of approximately 59×.
 
 **Table 6.3: Quantization accuracy impact on Pi 4B (diagnostic model, test split).**
 
 | Metric | FP32 | INT8 | Change |
 |--------|:----:|:----:|:------:|
-| M-Score | *(待填)* | *(待填)* | *(待填)* |
-| Sensitivity | *(待填)* | *(待填)* | *(待填)* |
-| Specificity | *(待填)* | *(待填)* | *(待填)* |
-| Accuracy | *(待填)* | *(待填)* | *(待填)* |
-
-> *(待填 — 运行 benchmark.py 和 evaluate.py 后填入。Dynamic range quantization 仅静态量化权重，激活值运行时动态量化，延迟收益可能小于 full INT8 PTQ；若数据显示 speedup 有限，见 Section 4.5 中的说明。)*
+| M-Score | 68.9% | 68.9% | 0.0% |
+| Sensitivity | 97.9% | 97.9% | 0.0% |
+| Specificity | 40.0% | 40.0% | 0.0% |
+| Accuracy | 65.4% | 65.4% | 0.0% |
 
 ### 6.4 User Interface
 
