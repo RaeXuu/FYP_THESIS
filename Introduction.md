@@ -61,3 +61,17 @@
   where $b$ is the bit-width. This reduces model size by approximately 75% and accelerates inference on hardware with efficient integer 
   arithmetic units, such as the ARM Cortex-A72 on the Raspberry Pi 4B. The accuracy impact of quantisation is evaluated empirically in Chapter 4 by         
   comparing FP32 and INT8 performance on the held-out test set.      
+
+
+
+- **深度可分离卷积 (DSConv)**: 需引用 MobileNet 论文。
+    
+    - _格式示例_：图 2.x 深度可分离卷积结构示意图 [1]。
+        
+    - _对应文献_：CHS-Net: A Deep learning approach for hierarchical segmentation of COVID-19 infected CT images - Scientific Figure on ResearchGate. Available from: https://www.researchgate.net/figure/Standard-convolution-operation-vs-depthwise-separable-convolution-operation_fig4_347125085 [accessed 10 Apr 2026]
+        
+- **坐标注意力机制 (CoordAtt)**: 需引用 Hou 等人的论文。
+    
+    - _格式示例_：图 2.x 坐标注意力模块结构图 [2]。
+        
+    - _对应文献_：HOU Q, ZHOU D, FENG J. Coordinate attention for efficient mobile network design[C]//Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2021: 13713-13722.

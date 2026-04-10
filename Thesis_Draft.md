@@ -127,6 +127,10 @@ The network begins with a single standard 3×3 convolutional layer that projects
 
 The total trainable parameter count is approximately 64.2K. The quantized INT8 TFLite model occupies 145.7 KB on disk.
 
+**Figure 4.1: LightweightCNN architecture visualisation. Each block represents one convolutional stage; spatial dimensions decrease from left to right (32×64 → 16×32 → 8×16 → 4×8) while the number of feature channels doubles at each stage (32 → 64 → 128 → 256). The final arrow denotes global average pooling followed by the linear classifier.**
+
+![[photo-from-mac/Screenshot 2026-04-10 at 2.03.49 PM.png]]
+
 ### 4.3 Coordinate Attention Module
 - 设计动机（为什么用 CoordAtt 而不是 SE Block）
 - 模块结构（H/W 方向分离的空间注意力）
