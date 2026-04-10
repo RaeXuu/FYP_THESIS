@@ -112,6 +112,9 @@ Both models accept a log-Mel spectrogram of shape 1×32×64 as input: one channe
 
 The backbone is a four-stage convolutional network built around the depthwise separable convolution (DSC) primitive [CITE Howard et al., MobileNets, 2017]. A DSC block factorises a standard k×k convolution into two sequential operations: a depthwise convolution that filters each input channel independently with a k×k kernel, followed by a pointwise (1×1) convolution that mixes channels. For C_in input channels, C_out output channels, and kernel size k, this reduces the parameter count from C_in × C_out × k² to C_in × k² + C_in × C_out—a factor of approximately k² = 9 for 3×3 kernels. This makes DSC well-suited to edge deployment where model size directly determines both storage footprint and inference latency.
 
+**Figure 4.2: Standard convolution vs depthwise separable convolution. A standard k×k convolution (top) convolves all C_in input channels simultaneously; a DSC (bottom) factors this into a per-channel depthwise convolution followed by a 1×1 pointwise convolution that mixes channels, reducing the parameter count by a factor of approximately k².**
+![Fig 4.2](<Paper Photo/depthwise-separable-convolution.png>)
+
 The network begins with a single standard 3×3 convolutional layer that projects the single-channel input to 32 feature maps. This initial layer uses a full convolution because the input has only one channel, making the depthwise factorisation trivial. Three subsequent DSC stages progressively double the channel count while halving the spatial resolution via 2×2 max-pooling. A global average pooling layer collapses the spatial dimensions to a 256-dimensional vector, which passes through a dropout layer (rate 0.3) and a linear classifier.
 
 **Table 4.1: LightweightCNN architecture. Spatial dimensions (H×W) are shown after each stage.**
@@ -140,6 +143,9 @@ Each DSC block in layers 2–4 integrates a Coordinate Attention (CoordAtt) modu
 
 The design choice is motivated by a limitation of the Squeeze-and-Excitation (SE) block [CITE Hu et al., CVPR 2018], the most widely adopted channel attention mechanism. SE computes a global descriptor by average-pooling the entire spatial feature map into a single C-dimensional vector, then uses it to rescale channel responses. This operation is spatially blind: it encodes which channels matter globally but discards where within the feature map the relevant activations occur. For heart sound spectrograms, spatial position carries diagnostic information. S1 and S2 energy concentrates in specific frequency bands (predominantly below 200 Hz) and at characteristic temporal positions within the cardiac cycle; pathological murmurs occupy frequency ranges that differ from normal sounds. An attention mechanism that ignores spatial structure cannot selectively amplify these localised cues.
 
+**Figure 4.3: Comparison of channel and spatial attention mechanisms. (a) SE block: global average pooling collapses the entire spatial map into a single C-dimensional descriptor, discarding positional information. (b) CBAM: augments SE with a spatial branch that uses channel pooling and a 7×7 convolution. (c) CoordAtt: decomposes pooling independently along H and W axes, preserving positional context along each direction. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
+![[Paper Photo/Comparison to Squeeze-and-Excitation block abd CBAM.png]]
+
 CoordAtt retains positional information by decomposing spatial pooling along the two axes independently. Given a feature map **X** ∈ ℝ^{N×C×H×W}, the module proceeds as follows:
 
 1. **Directional pooling.** **X** is pooled along the width axis to produce **X**_h ∈ ℝ^{N×C×H×1} (encoding frequency-axis context) and along the height axis to produce **X**_w ∈ ℝ^{N×C×1×W} (encoding time-axis context). Unlike global average pooling, each element retains its position along the non-pooled axis.
@@ -150,6 +156,12 @@ CoordAtt retains positional information by decomposing spatial pooling along the
 **a**_h ∈ [0,1]^{N×C×H×1} and **a**_w ∈ [0,1]^{N×C×1×W}.
 
 4. **Recalibration.** The output is **X** · **a**_h · **a**_w. Because **a**_h varies along the frequency axis and **a**_w varies along the time axis, their elementwise product creates a 2D attention map that weights each spatial location according to both frequency and temporal position—without collapsing either axis.
+
+**Figure 4.4: Coordinate Attention mechanism structure. The input feature map is pooled along the height and width axes independently (X Avg Pool, Y Avg Pool), concatenated and jointly encoded via a shared 1×1 convolution, then split and projected with separate sigmoid activations to produce axis-specific attention weights. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
+![[Paper Photo/Coordinate-Attention.png]]
+
+**Figure 4.5: Integration of Coordinate Attention into depthwise separable convolution blocks. (a) CA inserted after the depthwise convolution in an inverted residual block; (b) CA inserted after the depthwise convolution in a plain DSC block, as used in this work. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
+![[Paper Photo/How to plug the proposed CA block in the inverted residual block abd the sunglass block.png]]
 
 The additional parameter cost per CoordAtt block is small: approximately 1.6K, 3.1K, and 12.3K at layers 2, 3, and 4 respectively, modest relative to the DSC blocks they augment.
 

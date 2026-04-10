@@ -74,4 +74,4 @@
     
     - _格式示例_：图 2.x 坐标注意力模块结构图 [2]。
         
-    - _对应文献_：HOU Q, ZHOU D, FENG J. Coordinate attention for efficient mobile network design[C]//Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2021: 13713-13722.
+    - _对应文献_：Cao, Yining & Li, Chao & Peng, Yakun & Ru, Huiying. (2023). MCS-YOLO: A Multiscale Object Detection Method for Autonomous Driving Road Environment Recognition. IEEE Access. PP. 1-1. 10.1109/ACCESS.2023.3252021. 
