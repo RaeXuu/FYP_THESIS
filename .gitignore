@@ -3,7 +3,6 @@
 API Key.md
 
 # Images
-*.png
 *.jpg
 *.jpeg
 *.gif
@@ -13,8 +12,8 @@ API Key.md
 *.tiff
 *.ico
 
-# PDFs
-*.pdf
-
 # macOS
 .DS_Store
+
+# Windows notes media
+notes-from-Windows/media/
