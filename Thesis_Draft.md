@@ -146,16 +146,15 @@ The design choice is motivated by a limitation of the Squeeze-and-Excitation (SE
 **Figure 4.3: Comparison of channel and spatial attention mechanisms. (a) SE block: global average pooling collapses the entire spatial map into a single C-dimensional descriptor, discarding positional information. (b) CBAM: augments SE with a spatial branch that uses channel pooling and a 7×7 convolution. (c) CoordAtt: decomposes pooling independently along H and W axes, preserving positional context along each direction. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
 ![[Paper Photo/Comparison to Squeeze-and-Excitation block abd CBAM.png]]
 
-CoordAtt retains positional information by decomposing spatial pooling along the two axes independently. Given a feature map **X** ∈ ℝ^{N×C×H×W}, the module proceeds as follows:
+CoordAtt retains positional information by decomposing spatial pooling along the two axes independently. Given a feature map $\mathbf{X} \in \mathbb{R}^{N \times C \times H \times W}$, the module proceeds as follows:
 
-1. **Directional pooling.** **X** is pooled along the width axis to produce **X**_h ∈ ℝ^{N×C×H×1} (encoding frequency-axis context) and along the height axis to produce **X**_w ∈ ℝ^{N×C×1×W} (encoding time-axis context). Unlike global average pooling, each element retains its position along the non-pooled axis.
+1. **Directional pooling.** $\mathbf{X}$ is pooled along the width axis to produce $\mathbf{X}_h \in \mathbb{R}^{N \times C \times H \times 1}$ (encoding frequency-axis context) and along the height axis to produce $\mathbf{X}_w \in \mathbb{R}^{N \times C \times 1 \times W}$ (encoding time-axis context). Unlike global average pooling, each element retains its position along the non-pooled axis.
 
-2. **Joint encoding.** **X**_h and **X**_w (transposed to align the spatial dimension) are concatenated along the height axis and passed through a shared 1×1 convolution followed by BatchNorm and ReLU. The intermediate channel dimension is m = max(8, ⌊C/16⌋), giving m = 8, 8, 16 for C = 64, 128, 256 at layers 2, 3, 4 respectively.
+2. **Joint encoding.** $\mathbf{X}_h$ and $\mathbf{X}_w$ (transposed to align the spatial dimension) are concatenated along the height axis and passed through a shared 1×1 convolution followed by BatchNorm and ReLU. The intermediate channel dimension is $m = \max(8, \lfloor C/16 \rfloor)$, giving $m = 8, 8, 16$ for $C = 64, 128, 256$ at layers 2, 3, 4 respectively.
 
-3. **Attention map generation.** The encoded tensor is split back into height- and width-specific components. Each is projected by a separate 1×1 convolution and sigmoid to produce 
-**a**_h ∈ [0,1]^{N×C×H×1} and **a**_w ∈ [0,1]^{N×C×1×W}.
+3. **Attention map generation.** The encoded tensor is split back into height- and width-specific components. Each is projected by a separate 1×1 convolution and sigmoid to produce $\mathbf{a}_h \in [0,1]^{N \times C \times H \times 1}$ and $\mathbf{a}_w \in [0,1]^{N \times C \times 1 \times W}$.
 
-4. **Recalibration.** The output is **X** · **a**_h · **a**_w. Because **a**_h varies along the frequency axis and **a**_w varies along the time axis, their elementwise product creates a 2D attention map that weights each spatial location according to both frequency and temporal position—without collapsing either axis.
+4. **Recalibration.** The output is $\mathbf{X} \cdot \mathbf{a}_h \cdot \mathbf{a}_w$. Because $\mathbf{a}_h$ varies along the frequency axis and $\mathbf{a}_w$ varies along the time axis, their elementwise product creates a 2D attention map that weights each spatial location according to both frequency and temporal position—without collapsing either axis.
 
 **Figure 4.4: Coordinate Attention mechanism structure. The input feature map is pooled along the height and width axes independently (X Avg Pool, Y Avg Pool), concatenated and jointly encoded via a shared 1×1 convolution, then split and projected with separate sigmoid activations to produce axis-specific attention weights. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
 ![[Paper Photo/Coordinate-Attention.png]]
