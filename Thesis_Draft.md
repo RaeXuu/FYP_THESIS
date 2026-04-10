@@ -55,6 +55,12 @@ All recordings are resampled to 2,000 Hz. The Nyquist frequency of 1,000 Hz comf
 
 **Log-Mel spectrogram.** Each 2-second segment is transformed into a log-Mel spectrogram using the librosa library. The STFT is computed with a 256-point FFT (window length 256, hop length 96), and the magnitude spectrogram is projected onto 32 Mel-scale filter banks spanning 20–400 Hz. The power spectrogram (power = 2.0) is converted to a decibel scale via `power_to_db`, with a small epsilon (10⁻⁶) added before the logarithm to avoid numerical instability on silent frames. The resulting 2D feature map is fixed to shape 32×64 along the time axis using zero-padding or truncation, producing the final model input of shape 1×32×64.
 
+**Figure 3.1: Preprocessing pipeline applied to a representative heart sound recording. (a) Raw waveform; (b) after 25–400 Hz bandpass filtering; (c) first 2-second segment; (d) resulting Log-Mel spectrogram (64×64).**
+![Fig 3.1](photo-from-PC/fig3_2_preprocessing_steps.png)
+
+**Figure 3.2: Log-Mel spectrograms for a Normal (left) and Abnormal (right) recording after full preprocessing.**
+![Fig 3.2](photo-from-PC/fig3_3_mel_comparison.png)
+
 ### 3.3 Signal Quality Assessment Dataset
 - SQA 数据集构建（Good / Bad Quality 标注来源）
 - 数据统计（8:1 不平衡）
@@ -210,6 +216,13 @@ Several consistent patterns emerge across runs. First, label smoothing (Run 2 vs
 
 **Run 6** achieves the highest test M-Score (0.8903) and is selected as the final model. Its preprocessing parameters (n\_mels = 64, hop = 128) were identified by a 40-trial Bayesian hyperparameter search (Section 5.2.2), and the batch size was set to 16 based on the empirical comparison above.
 
+**Figure 5.1: Training loss and validation M-Score across epochs for Run 6 (final diagnostic model).**
+![Fig 5.1](photo-from-PC/fig5_1_training_curve.png)
+
+**Figure 5.2: Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
+![Fig 5.2a](photo-from-PC/confusion_matrix_diag.png)
+![Fig 5.2b](photo-from-PC/confusion_matrix_diag_trainpc.png)
+
 #### 5.2.2 Hyperparameter Search
 
 A Bayesian sweep over 40 trials was conducted using Weights & Biases, optimising for validation M-Score. The search space covered n\_mels ∈ {32, 64}, hop\_length ∈ {64, 96, 128}, n\_fft ∈ {128, 256, 512}, overlap ∈ {0.25, 0.5, 0.75}, learning rate ∈ {3×10⁻⁴, 5×10⁻⁴, 1×10⁻³}, and weight\_decay ∈ {1×10⁻⁴, 1×10⁻³}.
@@ -223,6 +236,12 @@ A Bayesian sweep over 40 trials was conducted using Weights & Biases, optimising
 | 3 | 0.9000 | 0.9539 | 0.8462 | 64 | 128 | 256 | 0.75 | 1e-3 | 1e-3 |
 
 The configuration n\_mels = 64, n\_fft = 256, overlap = 0.75, lr = 1×10⁻³ appears consistently across the top trials, indicating a stable optimal region. The selected parameters for the final model are n\_mels = 64, hop = 128, n\_fft = 256, weight\_decay = 1×10⁻³.
+
+**Figure 5.3: Distribution of validation M-Score across all 40 hyperparameter sweep trials.**
+![Fig 5.3](photo-from-PC/fig5_sweep_boxplot.png)
+
+**Figure 5.4: Validation M-Score for the top-performing sweep configurations.**
+![Fig 5.4](photo-from-PC/fig5_sweep_boxplot_best.png)
 
 #### 5.2.3 Decision Threshold Analysis
 
@@ -243,6 +262,9 @@ The default classification threshold of 0.5 was evaluated against a sweep from 0
 | 0.80 | 0.7652 | 0.8915 | 0.8284 |
 
 The optimal threshold (0.45) improves M-Score by only 0.0007 over the default 0.50, confirming that the Se/Sp imbalance is a property of the learned decision boundary rather than a post-processing artefact. The default threshold of 0.50 is retained for deployment, as it provides the highest Se (0.9569), which is the more clinically critical metric in a home screening context.
+
+**Figure 5.5: Se, Sp, and M-Score as a function of classification threshold on the Run 1 test set.**
+![Fig 5.5](photo-from-PC/fig5_3_threshold.png)
 
 ### 5.3 SQA Model Results
 - 训练结果（Test M-Score / Se / Sp）
@@ -287,6 +309,13 @@ The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K par
 | Test Accuracy | 0.8541 | 0.8046 |
 | Class imbalance | 4:1 | 8:1 |
 
+**Figure 5.6: SQA model M-Score, Se, and Sp across three training runs.**
+![Fig 5.6](photo-from-PC/fig5_4_sqa_runs.png)
+
+**Figure 5.7: Confusion matrix for the final SQA model (Run 3) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
+![Fig 5.7a](photo-from-PC/confusion_matrix_sqa.png)
+![Fig 5.7b](photo-from-PC/confusion_matrix_sqa_trainpc.png)
+
 The persistent Val→Test Se gap of approximately 0.048 across Runs 2 and 3 indicates that the generalisation ceiling is constrained by the small Bad-class population (364 recordings total; roughly 36 recordings in the test split), rather than by the training configuration. Further Se improvement would require additional bad-quality data. The Sp of 0.8029 means approximately 20% of good-quality recordings receive a lower P(Good) weight in the inference aggregation; this reduces effective signal volume but does not introduce noise into the diagnostic stage, and is considered acceptable given the deployment context.
 
 ### 5.4 Ablation Study
@@ -312,6 +341,9 @@ To quantify the contribution of each architectural component, four model variant
 
 **C → D: Residual connections.** Residual connections yield the highest test M-Score (0.8912, +0.004 over C), driven by a large Se increase (+0.041). However, Sp drops to 0.8027—lower than any other variant—and the best epoch regresses to 2, suggesting that residual connections accelerate convergence at the cost of reinforcing the model's tendency to over-predict Abnormal. The Se/Sp gap widens to 0.177.
 
+**Figure 5.8: Ablation study — M-Score, Sensitivity, and Specificity across four model configurations.**
+![Fig 5.8](photo-from-PC/fig5_2_ablation.png)
+
 **Architecture selection.** Config C is selected as the final architecture. While D achieves the highest M-Score, its Se/Sp imbalance (0.177 gap) is worse than A (0.161) and substantially worse than C (0.103). In a home screening device where missed abnormal cases carry greater clinical risk than false alarms, Se is more important than Sp—but the magnitude of Sp degradation in D (0.8027, a 32.8% false alarm rate on normal recordings) is considered unacceptable for a practical device. Config C provides the best balance across all three criteria: Se/Sp balance, training stability, and parameter efficiency.
 
 ### 5.5 Quantization Impact
@@ -328,6 +360,9 @@ To quantify the contribution of each architectural component, four model variant
 | Test Se | 97.9% | 97.9% | 0.0% |
 | Test Sp | 40.0% | 40.0% | 0.0% |
 | Inference latency (Pi 4B) | 13.44 ms | 13.43 ms | −0.1% |
+
+**Figure 5.9: FP32 vs INT8 model size comparison for diagnostic and SQA models.**
+![Fig 5.9](photo-from-PC/fig6_3_model_size.png)
 
 > **Note for writing:** Dynamic range quantization only statically quantizes weights; activations are quantized at runtime per call. This means the latency reduction relative to FP32 may be modest compared to full INT8 quantization (where both weights and activations are fixed at INT8 and the hardware can execute true INT8 GEMM). If the benchmark shows limited speedup, this is the expected explanation—not a flaw in the implementation.
 
@@ -409,8 +444,8 @@ This section reports inference latency, resource utilisation, and quantization a
 
 The bandpass filter and Log-Mel spectrogram are implemented as NumPy operations and are not subject to TFLite quantization; their latency is identical across both configurations. Quantization reduces latency only for the two TFLite model stages, though the improvement is marginal (under 0.1 ms per stage) because dynamic range quantization quantizes weights statically but leaves activations at runtime float, yielding limited arithmetic speedup on the ARM Cortex-A72 compared to full integer quantization.
 
-**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs).**
-[Fig 6.2 — insert grouped bar chart: fig6_2_latency.pdf]
+**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs). Preprocessing stages are unaffected by quantization.**
+![Fig 6.2](photo-from-PC/fig6_2_latency.png)
 
 **Table 6.2: Resource utilisation during a full 3-segment session.**
 
