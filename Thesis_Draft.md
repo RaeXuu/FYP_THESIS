@@ -1,5 +1,7 @@
 # FYP Thesis Draft
 
+> **[TODO] Fig 3.1 需要重新生成** — 现有图片是用旧参数（32 mels, hop=96）生成的，subplot (d) 标注为 `32×64`，与当前配置（64 mels, hop=128, target 64×64）不符，需用正确参数重跑。
+
 ---
 
 ## TODO
@@ -53,7 +55,7 @@ All recordings are resampled to 2,000 Hz. The Nyquist frequency of 1,000 Hz comf
 
 **Sliding window segmentation.** Each filtered recording is divided into fixed-length segments of 2 seconds (4,000 samples at 2,000 Hz) using a sliding window with 50% overlap (hop size = 2,000 samples). Segments shorter than 2 seconds at the end of a recording are zero-padded to the required length. The 50% overlap balances the trade-off between data volume and redundancy: it ensures that cardiac events near a segment boundary are fully captured in at least one adjacent window, while avoiding the excessive redundancy that a higher overlap ratio would introduce.
 
-**Log-Mel spectrogram.** Each 2-second segment is transformed into a log-Mel spectrogram using the librosa library. The STFT is computed with a 256-point FFT (window length 256, hop length 96), and the magnitude spectrogram is projected onto 32 Mel-scale filter banks spanning 20–400 Hz. The power spectrogram (power = 2.0) is converted to a decibel scale via `power_to_db`, with a small epsilon (10⁻⁶) added before the logarithm to avoid numerical instability on silent frames. The resulting 2D feature map is fixed to shape 32×64 along the time axis using zero-padding or truncation, producing the final model input of shape 1×32×64.
+**Log-Mel spectrogram.** Each 2-second segment is transformed into a log-Mel spectrogram using the librosa library. The STFT is computed with a 256-point FFT (window length 256, hop length 128), and the magnitude spectrogram is projected onto 64 Mel-scale filter banks spanning 20–400 Hz. The power spectrogram (power = 2.0) is converted to a decibel scale via `power_to_db`, with a small epsilon (10⁻⁶) added before the logarithm to avoid numerical instability on silent frames. The resulting 2D feature map is fixed to shape 64×64 along the time axis using zero-padding or truncation, producing the final model input of shape 1×1×64×64.
 
 **Figure 3.1: Preprocessing pipeline applied to a representative heart sound recording. (a) Raw waveform; (b) after 25–400 Hz bandpass filtering; (c) first 2-second segment; (d) resulting Log-Mel spectrogram (64×64).**
 ![Fig 3.1](photo-from-PC/fig3_2_preprocessing_steps.png)
@@ -419,34 +421,37 @@ The deployed system consists of two physical units: an ESP32-based acquisition d
 
 **ESP32 (acquisition side).** An analogue electret microphone feeds a signal conditioning amplifier whose output connects to ESP32 ADC pin GPIO34. The ADC samples at 2,000 Hz with 12-bit resolution; samples are cast to 16-bit signed PCM (little-endian) and placed into a ping-pong double buffer to avoid sampling gaps during BLE transmission. The double-buffer arrangement decouples the 2 kHz sampling timer from the BLE stack: one buffer fills while the other is transmitted, ensuring no samples are dropped at the boundaries of BLE notification packets. Each notification carries 128 bytes (64 samples), giving one packet every 32 ms at the operating sample rate. The ESP32 runs a GATT server exposing a single custom notify characteristic (UUID `beb5483e-36e1-4688-b7f5-ea07361b26a8`); after disconnect it immediately restarts advertisement, making reconnection transparent to the user.
 
-**Raspberry Pi 4B (inference side).** The Pi runs a single asyncio event loop (`main_pi.py`) that manages BLE reception, preprocessing, inference, storage, and UI updates concurrently without multi-threading. A `bleak` BLE client subscribes to ESP32 notifications; received bytes accumulate in a bytearray ring buffer. Once 8,000 bytes (4,000 samples = 2 seconds of audio) have arrived, the segment is passed synchronously through the full preprocessing and inference pipeline (described in Section 6.2). The inference result triggers OLED updates and, for Abnormal outcomes, automatic raw audio archival. A background asyncio task refreshes the system-status display every 2 seconds independently of the inference cycle.
+**Raspberry Pi 4B (inference side).** The Pi runs a single asyncio event loop (`main_pi.py`) that manages BLE reception, preprocessing, inference, storage, and UI updates concurrently without multi-threading. A `bleak` BLE client subscribes to ESP32 notifications; received bytes accumulate in a bytearray ring buffer. Once 80,000 bytes (40,000 samples = 20 seconds of audio) have arrived, the chunk is placed onto an asyncio queue and handed off to a dedicated inference worker task. Within each 20-second chunk, a sliding window of 2 seconds with 50% overlap (`HOP_SAMPLES = 2,000`) produces 19 overlapping windows; each window is independently preprocessed and scored. The chunk-level label is derived from a quality-weighted average over all windows that pass the SQA check (described in Section 6.2). A background asyncio task refreshes the system-status display every 2 seconds independently of the inference cycle.
 
 ### 6.2 Real-Time Inference Pipeline
 
-**Acquisition protocol.** Each diagnostic session consists of three fixed-length 2-second recordings separated by 30-second rest intervals (NUM\_COLLECTIONS = 3, COLLECTION\_INTERVAL = 30 s). The rest interval allows the user to reposition the stethoscope head between recordings and for residual motion artefacts from the previous placement to decay. Three recordings are used rather than one continuous stream because cardiac auscultation requires consistent probe contact; a single long recording is more likely to contain motion-corrupted windows, while multiple short recordings at stable positions improve the signal-to-noise ratio of the aggregated result.
+**Acquisition protocol.** The system operates in continuous streaming mode. Each diagnostic session is initiated by a short button press and runs until the user presses the button again to stop. BLE audio data accumulates in 20-second chunks (`CHUNK_DURATION = 20 s`, `CHUNK_BYTES = 80,000`). Within each chunk, a sliding window of 2 seconds with 50% overlap (`HOP_SAMPLES = 2,000` samples = 1 s) is applied, yielding 19 overlapping windows per chunk. The chunk granularity balances responsiveness against scheduling overhead: each chunk is dispatched as a single unit to the inference worker, keeping the asyncio event loop unblocked during BLE reception while still delivering a fresh result roughly every 20 seconds.
 
-**Preprocessing on-device.** Each 2-second PCM segment (4,000 int16 samples) is converted to float32 by dividing by 32,768. The same preprocessing pipeline used during training is then applied: a 5th-order Butterworth bandpass filter (25–400 Hz, zero-phase), followed by log-Mel spectrogram extraction (n\_mels = 64, n\_fft = 256, hop = 128, fmin = 20 Hz, fmax = 400 Hz, power 2.0). The resulting 2D feature map is reshaped to tensor shape (1, 1, 64, 128) for TFLite input.
+**Preprocessing on-device.** The 20-second chunk (40,000 int16 samples) is converted to float32 by dividing by 32,768, then passed through a 5th-order Butterworth bandpass filter (25–400 Hz, zero-phase) in one pass. Each 2-second sliding window (4,000 samples) is then extracted and peak-normalised independently: the window is divided by its maximum absolute value, preventing any single noise spike from suppressing the entire chunk. Log-Mel spectrogram extraction is applied per window (n\_mels = 64, n\_fft = 256, hop\_length = 128, fmin = 20 Hz, fmax = 400 Hz, power = 2.0). The time axis is zero-padded or trimmed to a fixed length of 64 frames, yielding a 64 × 64 feature map. This is reshaped to tensor shape (1, 1, 64, 64) for TFLite input.
 
-**Cascaded TFLite inference.** Each segment is processed by two INT8 quantized TFLite models loaded at startup. The SQA model runs first, producing a Good-Quality probability P(Good) ∈ [0, 1]. The diagnostic model then runs on the same input, producing an Abnormal probability P(Abnormal). No hard SQA threshold is applied; instead, the P(Good) score for each segment is used directly as a weight in the final aggregation. Across the three segments of a session, the final diagnostic score is:
+**Cascaded TFLite inference.** Each window is independently processed by two INT8 quantized TFLite models loaded at startup. The SQA model runs first, producing a Good-Quality probability P(Good) ∈ [0, 1]. Windows with P(Good) < 0.6 are rejected as acoustically degraded and excluded from inference. For windows that pass the SQA gate, the diagnostic model runs on the same feature tensor, producing a Normal probability P(Normal) ∈ [0, 1]. The chunk-level result aggregates all valid windows through a quality-weighted average:
 
-$$\text{score} = \frac{\sum_{i} P(\text{Good})_i \cdot P(\text{Abnormal})_i}{\sum_{i} P(\text{Good})_i}$$
+$$\text{score} = \frac{\sum_{i} P(\text{Good})_i \cdot P(\text{Normal})_i}{\sum_{i} P(\text{Good})_i}$$
 
-This weighted average down-weights acoustically degraded segments without discarding them entirely, and degrades gracefully when all segments have low quality (in which case the system reports a noise result rather than an unreliable diagnosis). The final label is Normal if score < 0.5, Abnormal otherwise.
+The final label is Normal if score > 0.5, Abnormal otherwise. Down-weighting by SQA score rather than binary rejection means that borderline-quality windows still contribute, but proportionally less than high-quality ones. If no windows in a chunk pass the SQA threshold (P(Good) < 0.6 for all 19 windows), the chunk is reported as low-quality noise and excluded from the session log.
 
 **Data flow summary.**
 
 ```
 BLE notification (128 B) → accumulate in ring buffer
-→ 8000 bytes complete (= 2 s segment)
-→ int16 → float32 normalisation
-→ bandpass filter (Butterworth 25–400 Hz)
-→ log-Mel spectrogram (64 × 128)
-→ reshape to (1, 1, 64, 128)
-→ SQA TFLite → P(Good)
-→ Diagnostic TFLite → P(Abnormal)
-→ accumulate (weight, score) pairs
-→ after 3 segments: weighted average → final label
-→ OLED update + optional audio archive
+→ 80,000 bytes complete (= 20 s chunk)
+→ offload to inference worker via asyncio.Queue
+→ int16 → float32 normalisation (÷ 32768)
+→ bandpass filter (Butterworth 25–400 Hz, whole chunk)
+→ sliding window (2 s, 50% overlap → 19 windows/chunk)
+  └─ per-window peak normalisation (÷ max absolute value)
+  └─ log-Mel spectrogram (64 × 64)
+  └─ reshape to (1, 1, 64, 64)
+  └─ SQA TFLite → P(Good); skip if < 0.6
+  └─ Diagnostic TFLite → P(Normal)
+  └─ accumulate (P(Good), P(Normal)) pairs
+→ chunk result: quality-weighted average → label + confidence
+→ OLED update + WAV archive
 ```
 
 ### 6.3 Performance Evaluation
@@ -468,7 +473,7 @@ The bandpass filter and Log-Mel spectrogram are implemented as NumPy operations 
 **Figure 6.1: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs). Preprocessing stages are unaffected by quantization.**
 ![Fig 6.1](photo-from-PC/fig6_2_latency.png)
 
-**Table 6.2: Resource utilisation during a full 3-segment session.**
+**Table 6.2: Resource utilisation during a continuous session (single 20-second chunk, INT8 models).**
 
 | Metric | Value |
 |--------|:-----:|
@@ -497,7 +502,7 @@ The device is designed for unsupervised home use: a user without technical exper
 
 | Action | Effect |
 |--------|--------|
-| Short press (standby) | Start a diagnostic session (BLE connect → 3-segment acquisition) |
+| Short press (standby) | Start a diagnostic session (BLE connect → continuous chunk streaming) |
 | Short press (during session) | Abort current session |
 | Long press ≥ 3 s | Safe shutdown (OLED confirms → `sudo shutdown -h now`) |
 
@@ -519,7 +524,7 @@ Edge deployment introduces failure modes absent from server environments: interm
 
 **Software watchdog.** The main inference loop writes a heartbeat timestamp to `/tmp/heartbeat.ts` every 30 seconds. A separate lightweight watchdog process (`src/watchdog.py`, managed by `watchdog.service`) reads this file every 30 seconds; if the timestamp is more than 90 seconds old—indicating the main loop is frozen rather than merely idle—the watchdog restarts `heartbeat.service` via `systemctl restart`. The 90-second threshold is three times the heartbeat interval, tolerating transient delays from long BLE connection attempts without false positives.
 
-**BLE reconnection with exponential backoff.** If the BLE link drops mid-session, the client catches the `BleakDisconnectedError` and re-enters the connection loop using an exponential backoff schedule: 1 s → 2 s → 4 s, capped at 30 s. This prevents the client from hammering the BLE stack during transient RF interference while still recovering promptly from brief dropouts. The ESP32 side mirrors this: on disconnect it immediately restarts advertisement, so reconnection completes as soon as the Pi retries.
+**BLE error handling.** If the initial BLE connection attempt fails (e.g., ESP32 out of range), `run_session` catches the exception, displays an error on the primary OLED, and returns after a 3-second pause. The system re-enters standby and prompts the user to press the button again to retry. If the link drops mid-session while streaming is in progress, the notification handler stops receiving data; the inference worker's 1-second queue timeout loop detects the idle state and exits cleanly once the user presses the button to stop. The ESP32 side mirrors this: on disconnect it immediately restarts advertisement, so a manual reconnection attempt succeeds as soon as the user initiates a new session.
 
 **Safe shutdown.** SIGTERM and SIGINT are both caught by a signal handler that executes a graceful teardown sequence: stop BLE notifications → cancel pending asyncio tasks → flush log buffers → invoke `sudo shutdown -h now`. The same sequence is triggered by a 3-second button long press, giving the user a hardware-level shutdown path that does not risk SD card filesystem corruption from an abrupt power cut. During shutdown the primary OLED briefly displays "Shutting down…" to confirm the action was registered.
 
