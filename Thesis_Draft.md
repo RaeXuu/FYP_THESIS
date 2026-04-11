@@ -105,6 +105,9 @@ This decoupled design has two practical advantages. First, it prevents corrupted
 
 Both models accept a log-Mel spectrogram of shape 1×32×64 as input: one channel, 32 Mel frequency bins spanning 20–400 Hz, and 64 time frames corresponding to a 2-second segment at 2 kHz sampling rate with 96-sample hop length. The compact representation keeps inference memory within the constraints of the Raspberry Pi 4B while retaining the frequency-temporal structure that distinguishes normal S1/S2 patterns from pathological sounds.
 
+**Figure 4.1: Cascaded dual-model inference pipeline. An input recording is first evaluated by the SQA model (Model 0); segments of insufficient quality are rejected as "Unsure", while high-quality segments are forwarded to the diagnostic model (Model 1) which produces a Normal or Abnormal classification.**
+![Fig 4.1](photo-from-PC/双模型宽大版.drawio.png)
+
 ### 4.2 Lightweight CNN Backbone
 - Depthwise Separable Convolution 结构
 - 各层设计（通道数、卷积核大小）
@@ -130,9 +133,8 @@ The network begins with a single standard 3×3 convolutional layer that projects
 
 The total trainable parameter count is approximately 64.2K. The quantized INT8 TFLite model occupies 145.7 KB on disk.
 
-**Figure 4.1: LightweightCNN architecture visualisation. Each block represents one convolutional stage; spatial dimensions decrease from left to right (32×64 → 16×32 → 8×16 → 4×8) while the number of feature channels doubles at each stage (32 → 64 → 128 → 256). The final arrow denotes global average pooling followed by the linear classifier.**
-
-![[photo-from-mac/Screenshot 2026-04-10 at 2.03.49 PM.png]]
+**Figure 4.3: LightweightCNN architecture visualisation. Each block represents one convolutional stage; spatial dimensions decrease from left to right (32×64 → 16×32 → 8×16 → 4×8) while the number of feature channels doubles at each stage (32 → 64 → 128 → 256). CoordAtt is inserted after the pointwise convolution at each DSC stage. The final arrow denotes global average pooling followed by the linear classifier.**
+![Fig 4.3](photo-from-PC/fig4_1_architecture_flat.png)
 
 ### 4.3 Coordinate Attention Module
 - 设计动机（为什么用 CoordAtt 而不是 SE Block）
@@ -143,8 +145,9 @@ Each DSC block in layers 2–4 integrates a Coordinate Attention (CoordAtt) modu
 
 The design choice is motivated by a limitation of the Squeeze-and-Excitation (SE) block [CITE Hu et al., CVPR 2018], the most widely adopted channel attention mechanism. SE computes a global descriptor by average-pooling the entire spatial feature map into a single C-dimensional vector, then uses it to rescale channel responses. This operation is spatially blind: it encodes which channels matter globally but discards where within the feature map the relevant activations occur. For heart sound spectrograms, spatial position carries diagnostic information. S1 and S2 energy concentrates in specific frequency bands (predominantly below 200 Hz) and at characteristic temporal positions within the cardiac cycle; pathological murmurs occupy frequency ranges that differ from normal sounds. An attention mechanism that ignores spatial structure cannot selectively amplify these localised cues.
 
-**Figure 4.3: Comparison of channel and spatial attention mechanisms. (a) SE block: global average pooling collapses the entire spatial map into a single C-dimensional descriptor, discarding positional information. (b) CBAM: augments SE with a spatial branch that uses channel pooling and a 7×7 convolution. (c) CoordAtt: decomposes pooling independently along H and W axes, preserving positional context along each direction. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
+**Figure 4.4: Comparison of channel and spatial attention mechanisms. (a) SE block: global average pooling collapses the entire spatial map into a single C-dimensional descriptor, discarding positional information. (b) CBAM: augments SE with a spatial branch that uses channel pooling and a 7×7 convolution. (c) CoordAtt: decomposes pooling independently along H and W axes, preserving positional context along each direction. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
 ![[Paper Photo/Comparison to Squeeze-and-Excitation block abd CBAM.png]]
+
 
 CoordAtt retains positional information by decomposing spatial pooling along the two axes independently. Given a feature map $\mathbf{X} \in \mathbb{R}^{N \times C \times H \times W}$, the module proceeds as follows:
 
@@ -156,10 +159,10 @@ CoordAtt retains positional information by decomposing spatial pooling along the
 
 4. **Recalibration.** The output is $\mathbf{X} \cdot \mathbf{a}_h \cdot \mathbf{a}_w$. Because $\mathbf{a}_h$ varies along the frequency axis and $\mathbf{a}_w$ varies along the time axis, their elementwise product creates a 2D attention map that weights each spatial location according to both frequency and temporal position—without collapsing either axis.
 
-**Figure 4.4: Coordinate Attention mechanism structure. The input feature map is pooled along the height and width axes independently (X Avg Pool, Y Avg Pool), concatenated and jointly encoded via a shared 1×1 convolution, then split and projected with separate sigmoid activations to produce axis-specific attention weights. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
+**Figure 4.5: Coordinate Attention mechanism structure. The input feature map is pooled along the height and width axes independently (X Avg Pool, Y Avg Pool), concatenated and jointly encoded via a shared 1×1 convolution, then split and projected with separate sigmoid activations to produce axis-specific attention weights. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
 ![[Paper Photo/Coordinate-Attention.png]]
 
-**Figure 4.5: Integration of Coordinate Attention into depthwise separable convolution blocks. (a) CA inserted after the depthwise convolution in an inverted residual block; (b) CA inserted after the depthwise convolution in a plain DSC block, as used in this work. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
+**Figure 4.6: Integration of Coordinate Attention into depthwise separable convolution blocks. (a) CA inserted after the depthwise convolution in an inverted residual block; (b) CA inserted after the depthwise convolution in a plain DSC block, as used in this work. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
 ![[Paper Photo/How to plug the proposed CA block in the inverted residual block abd the sunglass block.png]]
 
 The additional parameter cost per CoordAtt block is small: approximately 1.6K, 3.1K, and 12.3K at layers 2, 3, and 4 respectively, modest relative to the DSC blocks they augment.
@@ -204,6 +207,9 @@ $$M\text{-}Score = \frac{Se + Sp}{2}$$
 
 where Sensitivity (Se) = TP / (TP + FN) measures the fraction of abnormal recordings correctly identified, and Specificity (Sp) = TN / (TN + FP) measures the fraction of normal recordings correctly identified. M-Score is preferred over accuracy because accuracy can reach 80% by predicting all recordings as Normal, while yielding Se = 0 and M-Score = 0.5. All models are saved and compared by M-Score.
 
+**Figure 5.1: Confusion matrix structure and evaluation metrics. TP: abnormal correctly identified; FN: abnormal misclassified as normal; FP: normal misclassified as abnormal; TN: normal correctly identified. Sensitivity (Se), Specificity (Sp), and M-Score are derived from these four quantities.**
+![Fig 5.1](photo-from-PC/fig_confusion_concept.png)
+
 ### 5.2 Diagnostic Model Results
 - Run 1 基础训练结果
 - Run 2（Label Smoothing + Early Stopping）对比
@@ -231,12 +237,12 @@ Several consistent patterns emerge across runs. First, label smoothing (Run 2 vs
 
 **Run 6** achieves the highest test M-Score (0.8903) and is selected as the final model. Its preprocessing parameters (n\_mels = 64, hop = 128) were identified by a 40-trial Bayesian hyperparameter search (Section 5.2.2), and the batch size was set to 16 based on the empirical comparison above.
 
-**Figure 5.1: Training loss and validation M-Score across epochs for Run 6 (final diagnostic model).**
-![Fig 5.1](photo-from-PC/fig5_1_training_curve.png)
+**Figure 5.2: Training loss and validation M-Score across epochs for Run 6 (final diagnostic model).**
+![Fig 5.2](photo-from-PC/fig5_1_training_curve.png)
 
-**Figure 5.2: Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
-![Fig 5.2a](photo-from-PC/confusion_matrix_diag.png)
-![Fig 5.2b](photo-from-PC/confusion_matrix_diag_trainpc.png)
+**Figure 5.3: Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
+![Fig 5.3a](photo-from-PC/confusion_matrix_diag.png)
+![Fig 5.3b](photo-from-PC/confusion_matrix_diag_trainpc.png)
 
 #### 5.2.2 Hyperparameter Search
 
@@ -252,11 +258,11 @@ A Bayesian sweep over 40 trials was conducted using Weights & Biases, optimising
 
 The configuration n\_mels = 64, n\_fft = 256, overlap = 0.75, lr = 1×10⁻³ appears consistently across the top trials, indicating a stable optimal region. The selected parameters for the final model are n\_mels = 64, hop = 128, n\_fft = 256, weight\_decay = 1×10⁻³.
 
-**Figure 5.3: Distribution of validation M-Score across all 40 hyperparameter sweep trials.**
-![Fig 5.3](photo-from-PC/fig5_sweep_boxplot.png)
+**Figure 5.4: Distribution of validation M-Score across all 40 hyperparameter sweep trials.**
+![Fig 5.4](photo-from-PC/fig5_sweep_boxplot.png)
 
-**Figure 5.4: Validation M-Score for the top-performing sweep configurations.**
-![Fig 5.4](photo-from-PC/fig5_sweep_boxplot_best.png)
+**Figure 5.5: Validation M-Score for the top-performing sweep configurations.**
+![Fig 5.5](photo-from-PC/fig5_sweep_boxplot_best.png)
 
 #### 5.2.3 Decision Threshold Analysis
 
@@ -278,8 +284,8 @@ The default classification threshold of 0.5 was evaluated against a sweep from 0
 
 The optimal threshold (0.45) improves M-Score by only 0.0007 over the default 0.50, confirming that the Se/Sp imbalance is a property of the learned decision boundary rather than a post-processing artefact. The default threshold of 0.50 is retained for deployment, as it provides the highest Se (0.9569), which is the more clinically critical metric in a home screening context.
 
-**Figure 5.5: Se, Sp, and M-Score as a function of classification threshold on the Run 1 test set.**
-![Fig 5.5](photo-from-PC/fig5_3_threshold.png)
+**Figure 5.6: Se, Sp, and M-Score as a function of classification threshold on the Run 1 test set.**
+![Fig 5.6](photo-from-PC/fig5_3_threshold.png)
 
 ### 5.3 SQA Model Results
 - 训练结果（Test M-Score / Se / Sp）
@@ -324,12 +330,12 @@ The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K par
 | Test Accuracy | 0.8541 | 0.8046 |
 | Class imbalance | 4:1 | 8:1 |
 
-**Figure 5.6: SQA model M-Score, Se, and Sp across three training runs.**
-![Fig 5.6](photo-from-PC/fig5_4_sqa_runs.png)
+**Figure 5.7: SQA model M-Score, Se, and Sp across three training runs.**
+![Fig 5.7](photo-from-PC/fig5_4_sqa_runs.png)
 
-**Figure 5.7: Confusion matrix for the final SQA model (Run 3) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
-![Fig 5.7a](photo-from-PC/confusion_matrix_sqa.png)
-![Fig 5.7b](photo-from-PC/confusion_matrix_sqa_trainpc.png)
+**Figure 5.8: Confusion matrix for the final SQA model (Run 3) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
+![Fig 5.8a](photo-from-PC/confusion_matrix_sqa.png)
+![Fig 5.8b](photo-from-PC/confusion_matrix_sqa_trainpc.png)
 
 The persistent Val→Test Se gap of approximately 0.048 across Runs 2 and 3 indicates that the generalisation ceiling is constrained by the small Bad-class population (364 recordings total; roughly 36 recordings in the test split), rather than by the training configuration. Further Se improvement would require additional bad-quality data. The Sp of 0.8029 means approximately 20% of good-quality recordings receive a lower P(Good) weight in the inference aggregation; this reduces effective signal volume but does not introduce noise into the diagnostic stage, and is considered acceptable given the deployment context.
 
@@ -356,8 +362,8 @@ To quantify the contribution of each architectural component, four model variant
 
 **C → D: Residual connections.** Residual connections yield the highest test M-Score (0.8912, +0.004 over C), driven by a large Se increase (+0.041). However, Sp drops to 0.8027—lower than any other variant—and the best epoch regresses to 2, suggesting that residual connections accelerate convergence at the cost of reinforcing the model's tendency to over-predict Abnormal. The Se/Sp gap widens to 0.177.
 
-**Figure 5.8: Ablation study — M-Score, Sensitivity, and Specificity across four model configurations.**
-![Fig 5.8](photo-from-PC/fig5_2_ablation.png)
+**Figure 5.9: Ablation study — M-Score, Sensitivity, and Specificity across four model configurations.**
+![Fig 5.9](photo-from-PC/fig5_2_ablation.png)
 
 **Architecture selection.** Config C is selected as the final architecture. While D achieves the highest M-Score, its Se/Sp imbalance (0.177 gap) is worse than A (0.161) and substantially worse than C (0.103). In a home screening device where missed abnormal cases carry greater clinical risk than false alarms, Se is more important than Sp—but the magnitude of Sp degradation in D (0.8027, a 32.8% false alarm rate on normal recordings) is considered unacceptable for a practical device. Config C provides the best balance across all three criteria: Se/Sp balance, training stability, and parameter efficiency.
 
@@ -376,8 +382,8 @@ To quantify the contribution of each architectural component, four model variant
 | Test Sp | 40.0% | 40.0% | 0.0% |
 | Inference latency (Pi 4B) | 13.44 ms | 13.43 ms | −0.1% |
 
-**Figure 5.9: FP32 vs INT8 model size comparison for diagnostic and SQA models.**
-![Fig 5.9](photo-from-PC/fig6_3_model_size.png)
+**Figure 5.10: FP32 vs INT8 model size comparison for diagnostic and SQA models.**
+![Fig 5.10](photo-from-PC/fig6_3_model_size.png)
 
 > **Note for writing:** Dynamic range quantization only statically quantizes weights; activations are quantized at runtime per call. This means the latency reduction relative to FP32 may be modest compared to full INT8 quantization (where both weights and activations are fixed at INT8 and the hardware can execute true INT8 GEMM). If the benchmark shows limited speedup, this is the expected explanation—not a flaw in the implementation.
 
@@ -459,8 +465,8 @@ This section reports inference latency, resource utilisation, and quantization a
 
 The bandpass filter and Log-Mel spectrogram are implemented as NumPy operations and are not subject to TFLite quantization; their latency is identical across both configurations. Quantization reduces latency only for the two TFLite model stages, though the improvement is marginal (under 0.1 ms per stage) because dynamic range quantization quantizes weights statically but leaves activations at runtime float, yielding limited arithmetic speedup on the ARM Cortex-A72 compared to full integer quantization.
 
-**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs). Preprocessing stages are unaffected by quantization.**
-![Fig 6.2](photo-from-PC/fig6_2_latency.png)
+**Figure 6.1: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs). Preprocessing stages are unaffected by quantization.**
+![Fig 6.1](photo-from-PC/fig6_2_latency.png)
 
 **Table 6.2: Resource utilisation during a full 3-segment session.**
 
