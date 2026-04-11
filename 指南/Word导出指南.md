@@ -1,0 +1,1 @@
+pandoc Thesis_Draft.md -o Thesis_Draft.docx --reference-doc="/Users/raexu/Downloads/AY25-26 FYP thesis format.docx"

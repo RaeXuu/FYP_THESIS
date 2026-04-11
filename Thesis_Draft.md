@@ -108,7 +108,7 @@ This decoupled design has two practical advantages. First, it prevents corrupted
 Both models accept a log-Mel spectrogram of shape 1×32×64 as input: one channel, 32 Mel frequency bins spanning 20–400 Hz, and 64 time frames corresponding to a 2-second segment at 2 kHz sampling rate with 96-sample hop length. The compact representation keeps inference memory within the constraints of the Raspberry Pi 4B while retaining the frequency-temporal structure that distinguishes normal S1/S2 patterns from pathological sounds.
 
 **Figure 4.1: Cascaded dual-model inference pipeline. An input recording is first evaluated by the SQA model (Model 0); segments of insufficient quality are rejected as "Unsure", while high-quality segments are forwarded to the diagnostic model (Model 1) which produces a Normal or Abnormal classification.**
-![Fig 4.1](photo-from-PC/双模型宽大版.drawio.png)
+![Fig 4.1](photo-from-PC/双模型.drawio.png)
 
 ### 4.2 Lightweight CNN Backbone
 - Depthwise Separable Convolution 结构
@@ -207,7 +207,7 @@ The model is trained with Adam optimiser, learning rate 1×10⁻³, and a `Reduc
 
 $$M\text{-}Score = \frac{Se + Sp}{2}$$
 
-where Sensitivity (Se) = TP / (TP + FN) measures the fraction of abnormal recordings correctly identified, and Specificity (Sp) = TN / (TN + FP) measures the fraction of normal recordings correctly identified. M-Score is preferred over accuracy because accuracy can reach 80% by predicting all recordings as Normal, while yielding Se = 0 and M-Score = 0.5. All models are saved and compared by M-Score.
+where Sensitivity $Se = \frac{TP}{TP + FN}$ measures the fraction of abnormal recordings correctly identified, and Specificity $Sp = \frac{TN}{TN + FP}$ measures the fraction of normal recordings correctly identified. M-Score is preferred over accuracy because accuracy can reach 80% by predicting all recordings as Normal, while yielding $Se = 0$ and $\text{M-Score} = 0.5$. All models are saved and compared by M-Score.
 
 **Figure 5.1: Confusion matrix structure and evaluation metrics. TP: abnormal correctly identified; FN: abnormal misclassified as normal; FP: normal misclassified as abnormal; TN: normal correctly identified. Sensitivity (Se), Specificity (Sp), and M-Score are derived from these four quantities.**
 ![Fig 5.1](photo-from-PC/fig_confusion_concept.png)
@@ -397,27 +397,8 @@ To quantify the contribution of each architectural component, four model variant
 
 The deployed system consists of two physical units: an ESP32-based acquisition device and a Raspberry Pi 4B inference station, communicating exclusively over Bluetooth Low Energy (BLE). The separation of concerns between the two units is deliberate: the ESP32 handles only signal capture and wireless transmission, keeping its firmware simple and power-efficient, while all computation-intensive processing—filtering, feature extraction, and model inference—runs on the Pi.
 
-```
-┌─────────────────────────────────┐
-│          ESP32 (acquisition)     │
-│                                  │
-│  Microphone → ADC → PCM buffer   │
-│  → BLE GATT notification (128 B) │
-└────────────────┬────────────────┘
-                 │  BLE 2.4 GHz
-┌────────────────▼────────────────┐
-│     Raspberry Pi 4B (inference)  │
-│                                  │
-│  BLE rx → preprocess → SQA →     │
-│  diagnostic → weighted average   │
-│  → result storage + display      │
-└────────────────┬────────────────┘
-                 │  I2C / GPIO
-┌────────────────▼────────────────┐
-│   Peripherals                    │
-│   OLED × 2 │ button │ LED        │
-└─────────────────────────────────┘
-```
+**Figure 6.1: System architecture overview. The ESP32 captures audio via I²S, decimates to 2 kHz, and streams PCM data over BLE. The Raspberry Pi 4B receives the stream and runs the full inference pipeline (preprocessing → SQA → diagnostic model), with results stored to WAV/CSV/JSON and displayed on peripheral outputs. A watchdog process ensures continuous operation.**
+![Fig 6.1](photo-from-PC/fig_system_diagram.png)
 
 **ESP32 (acquisition side).** An INMP441 MEMS digital microphone connects to the ESP32 via I²S. The I²S peripheral is configured at 8,000 Hz with 16-bit receive width (the INMP441's native 24-bit output is truncated to the lower 16 bits). Before downsampling, a DC-removal stage (sliding mean over 1,000 samples) eliminates baseline drift, and a 2nd-order IIR anti-aliasing low-pass filter (cutoff ≈ 800 Hz at 8 kHz) is applied to prevent spectral folding. A 4:1 decimation stage then reduces the rate to 2,000 Hz. A 30× digital gain with ±32,767 clipping compensates for the INMP441's low raw output level. The resulting 16-bit PCM samples (little-endian, mono) are placed into a ping-pong double buffer to decouple the sampling timer from the BLE stack, ensuring no samples are dropped at packet boundaries. Each BLE notification carries 128 bytes (64 samples), giving one packet every 32 ms at the 2,000 Hz operating rate. The ESP32 runs a GATT server exposing a single custom notify characteristic (UUID `beb5483e-36e1-4688-b7f5-ea07361b26a8`); after disconnect it immediately restarts advertisement, making reconnection transparent to the user.
 
@@ -470,8 +451,8 @@ This section reports inference latency, resource utilisation, and quantization a
 
 The bandpass filter and Log-Mel spectrogram are implemented as NumPy operations and are not subject to TFLite quantization; their latency is identical across both configurations. Quantization reduces latency only for the two TFLite model stages, though the improvement is marginal (under 0.1 ms per stage) because dynamic range quantization quantizes weights statically but leaves activations at runtime float, yielding limited arithmetic speedup on the ARM Cortex-A72 compared to full integer quantization.
 
-**Figure 6.1: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs). Preprocessing stages are unaffected by quantization.**
-![Fig 6.1](photo-from-PC/fig6_2_latency.png)
+**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs). Preprocessing stages are unaffected by quantization.**
+![Fig 6.2](photo-from-PC/fig6_2_latency.png)
 
 **Table 6.2: Resource utilisation during a continuous session (single 20-second chunk, INT8 models).**
 
