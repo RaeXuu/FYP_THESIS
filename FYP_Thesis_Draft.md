@@ -1,22 +1,171 @@
-# FYP Thesis Draft
 
-> **[TODO] Fig 3.1 需要重新生成** — 现有图片是用旧参数（32 mels, hop=96）生成的，subplot (d) 标注为 `32×64`，与当前配置（64 mels, hop=128, target 64×64）不符，需用正确参数重跑。
+## TITLE PAGE
+
+**[PLACEHOLDER]**
+
+FYP TITLE: Edge AI-Based Heart Sound Diagnosis System
+
+Submitted by: [Student Name]
+
+[Home University and Department]
+
+The final year project work was carried out under the 3+1+1 Educational Framework at the National University of Singapore (Suzhou) Research Institute
+
+**May 2026**
+
+---
+
+## ABSTRACT
+
+**[TODO — 约 300 字，涵盖：研究目标、方法、主要结果]**
+
+---
+
+## ACKNOWLEDGMENTS
+
+**[TODO — 致谢导师、数据集来源等]**
+
+---
+
+## CONTENTS
+
+> *Page numbers to be filled after final typesetting.*
+
+ABSTRACT … i
+
+ACKNOWLEDGEMENTS … ii
+
+CONTENTS … iii
+
+LIST OF FIGURES … iv
+
+LIST OF TABLES … v
+
+LIST OF SYMBOLS AND ABBREVIATIONS … vi
+
+**CHAPTER 1 INTRODUCTION** … X
+- 1.1 Background and Motivation … X
+- 1.2 Problem Statement … X
+- 1.3 Objectives and Contributions … X
+- 1.4 Thesis Organisation … X
+
+**CHAPTER 2 RELATED WORK** … X
+- 2.1 Heart Sound Classification … X
+- 2.2 Lightweight CNN Architectures for Edge Deployment … X
+- 2.3 Attention Mechanisms in CNN … X
+- 2.4 TinyML and Edge AI … X
+
+**CHAPTER 3 DATASET AND PREPROCESSING** … X
+- 3.1 Datasets … X
+- 3.2 Signal Preprocessing Pipeline … X
+- 3.3 Data Augmentation and Class Balancing … X
+
+**CHAPTER 4 MODEL DESIGN** … X
+- 4.1 Overall Architecture … X
+- 4.2 Lightweight CNN Backbone … X
+- 4.3 Coordinate Attention Module … X
+- 4.4 Signal Quality Assessment Model … X
+- 4.5 Model Quantization … X
+
+**CHAPTER 5 TRAINING AND EXPERIMENTS** … X
+- 5.1 Training Configuration … X
+- 5.2 Diagnostic Model Results … X
+  - 5.2.1 Training Progression … X
+  - 5.2.2 Hyperparameter Search … X
+  - 5.2.3 Decision Threshold Analysis … X
+- 5.3 SQA Model Results … X
+- 5.4 Ablation Study … X
+- 5.5 Quantization Impact … X
+
+**CHAPTER 6 EDGE DEPLOYMENT** … X
+- 6.1 System Architecture Overview … X
+- 6.2 Real-Time Inference Pipeline … X
+- 6.3 Performance Evaluation … X
+- 6.4 User Interface … X
+- 6.5 System Reliability … X
+
+**CHAPTER 7 CONCLUSION** … X
+- 7.1 Summary of Contributions … X
+- 7.2 Limitations … X
+- 7.3 Future Work … X
+
+REFERENCES … X
+
+---
+
+## LIST OF FIGURES
+
+> *Page numbers to be filled after final typesetting.*
+
+| Figure    | Caption                                                                                                                                                                                                    | Page |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Fig. 3.1  | Preprocessing pipeline applied to a representative heart sound recording. (a) Raw waveform; (b) after 25–400 Hz bandpass filtering; (c) first 2-second segment; (d) resulting Log-Mel spectrogram (64×64). | X    |
+| Fig. 3.2  | Log-Mel spectrograms for a Normal (left) and Abnormal (right) recording after full preprocessing.                                                                                                          | X    |
+| Fig. 4.1  | Cascaded dual-model inference pipeline.                                                                                                                                                                    | X    |
+| Fig. 4.2  | Standard convolution vs depthwise separable convolution.                                                                                                                                                   | X    |
+| Fig. 4.3  | LightweightCNN architecture visualisation.                                                                                                                                                                 | X    |
+| Fig. 4.4  | Comparison of channel and spatial attention mechanisms: SE block, CBAM, and CoordAtt.                                                                                                                      | X    |
+| Fig. 4.5  | Coordinate Attention mechanism structure.                                                                                                                                                                  | X    |
+| Fig. 4.6  | Integration of Coordinate Attention into depthwise separable convolution blocks.                                                                                                                           | X    |
+| Fig. 5.1  | Confusion matrix structure and evaluation metrics (Se, Sp, M-Score).                                                                                                                                       | X    |
+| Fig. 5.2  | Training loss and validation M-Score across epochs for Run 6 (final diagnostic model).                                                                                                                     | X    |
+| Fig. 5.3  | Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: Pi (INT8); Right: training machine (FP32).                                                                                  | X    |
+| Fig. 5.4  | Distribution of validation M-Score across all 40 hyperparameter sweep trials.                                                                                                                              | X    |
+| Fig. 5.5  | Validation M-Score for the top-performing sweep configurations.                                                                                                                                            | X    |
+| Fig. 5.6  | Se, Sp, and M-Score as a function of classification threshold on the Run 1 test set.                                                                                                                       | X    |
+| Fig. 5.7  | SQA model M-Score, Se, and Sp across three training runs.                                                                                                                                                  | X    |
+| Fig. 5.8  | Confusion matrix for the final SQA model (Run 3) on the test set. Left: Pi (INT8); Right: training machine (FP32).                                                                                         | X    |
+| Fig. 5.9  | Ablation study — M-Score, Sensitivity, and Specificity across four model configurations.                                                                                                                   | X    |
+| Fig. 5.10 | FP32 vs INT8 model size comparison for diagnostic and SQA models.                                                                                                                                          | X    |
+| Fig. 6.1  | System architecture overview (ESP32 → BLE → Raspberry Pi 4B inference pipeline).                                                                                                                           | X    |
+| Fig. 6.2  | Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs).                                                                                                                                   | X    |
+
+---
+
+## LIST OF TABLES
+
+> *Page numbers to be filled after final typesetting.*
+
+| Table | Caption | Page |
+|-------|---------|------|
+| Table 4.1 | LightweightCNN architecture. Spatial dimensions (H×W) shown after each stage. | X |
+| Table 5.1 | Training run comparison. All runs use the same test split. | X |
+| Table 5.2 | Top 3 hyperparameter sweep trials (validation M-Score). | X |
+| Table 5.3 | Threshold sweep on Run 1 model (test set). | X |
+| Table 5.4 | Ablation study results. All variants trained on the same fixed test split. | X |
+| Table 5.5 | FP32 vs quantized model comparison (diagnostic model, Pi 4B, per-slice, n=6273). | X |
+| Table 5.6 | SQA model — validation M-Score across training epochs (Run 1 baseline). | X |
+| Table 5.7 | SQA model — three-run progression. | X |
+| Table 5.8 | Final SQA model (Run 3) vs diagnostic model (Run 6). | X |
+| Table 6.1 | Per-stage inference latency on Pi 4B (single 2-second segment, median of 100 runs). | X |
+| Table 6.2 | Resource utilisation during a continuous session (single 20-second chunk, INT8 models). | X |
+| Table 6.3 | Quantization accuracy impact on Pi 4B (diagnostic model, decoupled, per-slice, n=6273). | X |
+
+---
+
+## LIST OF SYMBOLS AND ABBREVIATIONS
+
+| Symbol / Abbreviation | Description                                                                   |
+| --------------------- | ----------------------------------------------------------------------------- |
+| Se                    | Sensitivity = TP / (TP + FN)                                                  |
+| Sp                    | Specificity = TN / (TN + FP)                                                  |
+| M-Score               | (Se + Sp) / 2; primary evaluation metric of the PhysioNet/CinC 2016 Challenge |
+| SQA                   | Signal Quality Assessment                                                     |
+| DSC                   | Depthwise Separable Convolution                                               |
+| CoordAtt              | Coordinate Attention                                                          |
+| BLE                   | Bluetooth Low Energy                                                          |
+| TFLite                | TensorFlow Lite                                                               |
+| FP32                  | 32-bit floating-point representation                                          |
+| INT8                  | 8-bit integer quantization                                                    |
+| CNN                   | Convolutional Neural Network                                                  |
+| ESP32                 | Espressif ESP32 microcontroller                                               |
+| Pi / RPi 4B           | Raspberry Pi 4 Model B                                                        |
+| PCM                   | Pulse-Code Modulation                                                         |
+| RSS                   | Resident Set Size                                                             |
 
 ---
 
 ## TODO
-
-### 需要跑数据才能填的表格
-- [x] **Table 5.5** — FP32 vs INT8 对比（model size / M-Score / Se / Sp / latency）
-- [x] **Table 6.1** — 各阶段推理延迟（bandpass / Mel / SQA / diagnostic，FP32 vs INT8）
-- [x] **Table 6.2** — 资源占用（Peak CPU % / RSS MB / FP32 model size）
-- [x] **Table 6.3** — 量化精度对比（M-Score / Se / Sp / Accuracy，FP32 vs INT8）
-
-### 需要补充的引用
-- [ ] **[CITE PhysioNet 2016]** — Section 3.1
-- [ ] **[CITE Howard et al., MobileNets, 2017]** — Section 4.2
-- [ ] **[CITE Hou et al., CVPR 2021]** — Section 4.3（CoordAtt）
-- [ ] **[CITE Hu et al., CVPR 2018]** — Section 4.3（SE block）
 
 ### 需要写的章节
 - [ ] **Chapter 1** — Introduction（motivation、contribution list、chapter outline）
@@ -33,63 +182,59 @@
 
 ## Chapter 3: Dataset and Preprocessing
 
-### 3.1 Dataset Overview
-- PhysioNet/CinC Challenge 2016
-- 数据集统计（Normal / Abnormal 数量、比例、来源）
-- 类别不平衡问题说明（4:1）
+### 3.1 Datasets
 
-The primary dataset for the diagnostic model is the PhysioNet/CinC Challenge 2016 heart sound database [CITE PhysioNet 2016]. The dataset comprises recordings collected from clinical and non-clinical environments across six subsets (training-a through training-f), each accompanied by a REFERENCE.csv file assigning a binary diagnostic label (Normal / Abnormal) and a REFERENCE-SQI.csv file providing a signal quality index (SQI) score per recording.
+Both the diagnostic model and the SQA model are trained on data derived from the PhysioNet/CinC Challenge 2016 heart sound database [1], which comprises recordings collected from clinical and non-clinical environments across six subsets (training-a through training-f). Each recording is accompanied by a REFERENCE.csv file (binary diagnostic label: Normal / Abnormal) and a REFERENCE-SQI.csv file (signal quality index score). The two models use different label sources and class definitions from this common pool, as summarised in Table 3.1.
 
-Recordings with SQI score = 0 are excluded from the diagnostic dataset, as they are marked as acoustically unusable by the challenge organisers. After this quality filtering, 2,876 recordings remain. The class distribution is heavily skewed: 2,304 Normal (80.1%) and 572 Abnormal (19.9%), yielding an approximately 4:1 imbalance. This ratio reflects the prevalence of pathological conditions in the source population and is a persistent challenge for training unbiased classifiers on this dataset.
+**Table 3.1: Dataset summary for the diagnostic and SQA models.**
 
-After segmentation into 2-second windows (detailed in Section 3.2), the 2,876 recordings produce 62,003 fixed-length segments in total. The dataset is partitioned at the recording level—all segments from a given recording appear in exactly one split—to prevent data leakage. Using a fixed random seed (seed = 42), the split is 80/10/10, yielding 49,833 training, 5,897 validation, and 6,273 test segments. The test set filenames are persisted to disk on the first training run and never modified thereafter, ensuring the test set remains unseen throughout all subsequent experiments.
+| | Diagnostic Model | SQA Model |
+|---|---|---|
+| Label source | REFERENCE.csv | REFERENCE-SQI.csv |
+| Positive class (label = 1) | Abnormal | Bad Quality (SQI = 0) |
+| Negative class (label = 0) | Normal | Good Quality (SQI ≠ 0) |
+| Total recordings | 2,876 | 3,240 |
+| Class ratio (neg:pos) | ~4:1 (2,304 / 572) | ~8:1 (2,876 / 364) |
+| Total segments (after 3.2) | 62,003 | 68,104 |
+| Train / Val / Test segments | 49,833 / 5,897 / 6,273 | 54,842 / 6,536 / 6,726 |
+
+For the diagnostic dataset, recordings with SQI = 0 are excluded prior to training, as they are acoustically unusable. For the SQA dataset, these same recordings are retained—they constitute the Bad Quality (positive) class. The SQA label convention is inverted relative to the raw SQI annotation so that Sensitivity in M-Score measures the Bad Quality detection rate, the operationally critical quantity: an undetected bad-quality segment propagates noise directly into the diagnostic stage.
+
+Both datasets are partitioned at the recording level (all segments from a given recording appear in exactly one split) using a fixed random seed (seed = 42), preventing data leakage. Test set filenames are persisted to disk on the first training run and held fixed throughout all experiments.
 
 ### 3.2 Signal Preprocessing Pipeline
-- 带通滤波（25–400 Hz，Butterworth）
-- 滑动窗口分割（2s，50% overlap）
-- Log-Mel 频谱图提取（64×64）
+> *The pipeline described below applies identically to both the diagnostic and SQA datasets.*
 
-All recordings are resampled to 2,000 Hz. The Nyquist frequency of 1,000 Hz comfortably covers the diagnostically relevant range of heart sounds (20–600 Hz), while the reduced sampling rate minimises both storage and downstream computation relative to typical audio sampling rates.
+All recordings are resampled to 2,000 Hz, sufficient to capture the diagnostically relevant range of heart sounds (20–600 Hz) while minimising storage and computation. Each recording then passes through three stages (Figure 3.1):
 
-**Bandpass filtering.** A 5th-order Butterworth bandpass filter with cutoff frequencies of 25 Hz and 400 Hz is applied to each recording using zero-phase forward-backward filtering (`scipy.signal.filtfilt`). The lower cutoff at 25 Hz suppresses residual low-frequency baseline wander and body motion artefacts; the upper cutoff at 400 Hz removes high-frequency noise above the dominant energy range of S1, S2, and common murmurs. Zero-phase filtering is used to avoid introducing any group delay distortion that would shift the temporal positions of cardiac events.
+**Bandpass filtering.** A 5th-order Butterworth bandpass filter (25–400 Hz) is applied via zero-phase forward-backward filtering (`scipy.signal.filtfilt`). The 25 Hz lower cutoff suppresses baseline wander and motion artefacts; the 400 Hz upper cutoff removes noise above the dominant energy range of S1, S2, and common murmurs. Zero-phase filtering preserves the temporal positions of cardiac events.
 
-**Sliding window segmentation.** Each filtered recording is divided into fixed-length segments of 2 seconds (4,000 samples at 2,000 Hz) using a sliding window with 50% overlap (hop size = 2,000 samples). Segments shorter than 2 seconds at the end of a recording are zero-padded to the required length. The 50% overlap balances the trade-off between data volume and redundancy: it ensures that cardiac events near a segment boundary are fully captured in at least one adjacent window, while avoiding the excessive redundancy that a higher overlap ratio would introduce.
+**Sliding window segmentation.** Each filtered recording is divided into fixed-length 2-second segments (4,000 samples) with 50% overlap (hop size = 2,000 samples). Segments shorter than 2 seconds at recording boundaries are zero-padded. The 50% overlap ensures cardiac events near a window boundary are fully captured in at least one adjacent window.
 
-**Log-Mel spectrogram.** Each 2-second segment is transformed into a log-Mel spectrogram using the librosa library. The STFT is computed with a 256-point FFT (window length 256, hop length 128), and the magnitude spectrogram is projected onto 64 Mel-scale filter banks spanning 20–400 Hz. The power spectrogram (power = 2.0) is converted to a decibel scale via `power_to_db`, with a small epsilon (10⁻⁶) added before the logarithm to avoid numerical instability on silent frames. The resulting 2D feature map is fixed to shape 64×64 along the time axis using zero-padding or truncation, producing the final model input of shape 1×1×64×64.
+**Log-Mel spectrogram.** Each 2-second segment is transformed into a log-Mel spectrogram using the librosa library (256-point FFT, hop length 128, 64 Mel filter banks spanning 25–400 Hz, power = 2.0). The time axis is padded or trimmed to a fixed 64 frames, yielding a 64×64 feature map as the final model input of shape 1×64×64.
 
-**Figure 3.1: Preprocessing pipeline applied to a representative heart sound recording. (a) Raw waveform; (b) after 25–400 Hz bandpass filtering; (c) first 2-second segment; (d) resulting Log-Mel spectrogram (64×64).**
 ![Fig 3.1](photo-from-PC/fig3_2_preprocessing_steps.png)
+**Figure 3.1: Preprocessing pipeline applied to a representative heart sound recording. (a) Raw waveform; (b) after 25–400 Hz bandpass filtering; (c) first 2-second segment; (d) resulting Log-Mel spectrogram (64×64).**
 
-**Figure 3.2: Log-Mel spectrograms for a Normal (left) and Abnormal (right) recording after full preprocessing.**
 ![Fig 3.2](photo-from-PC/fig3_3_mel_comparison.png)
+**Figure 3.2: Log-Mel spectrograms for a Normal (left) and Abnormal (right) recording after full preprocessing.**
 
-### 3.3 Signal Quality Assessment Dataset
-- SQA 数据集构建（Good / Bad Quality 标注来源）
-- 数据统计（8:1 不平衡）
 
-The SQA model requires a quality-labelled dataset separate from the diagnostic labels. This is constructed from the same PhysioNet 2016 source using the REFERENCE-SQI.csv annotations, which are included for all six subsets. Each recording's SQI score is binarised: score ≠ 0 is assigned Good Quality (label 1); score = 0 is assigned Bad Quality (label 0). Unlike the diagnostic dataset, no prior quality filtering is applied—Bad Quality recordings are retained, as they constitute the negative class for training.
+### 3.3 Data Augmentation and Class Balancing
 
-The resulting dataset contains 3,240 recordings: 2,876 Good Quality (88.8%) and 364 Bad Quality (11.2%), an approximately 8:1 imbalance. The same 80/10/10 recording-level split strategy is applied, with augmentation enabled only on the training split.
+**Class balancing.** `WeightedRandomSampler` is applied at the DataLoader level for both datasets, assigning each sample a weight inversely proportional to its class frequency. This produces balanced mini-batches without modifying the underlying data distribution, directly counteracting the 4:1 and 8:1 imbalances.
 
-For training, the labels are inverted relative to the raw annotation: Bad Quality is assigned label 1 (positive class) and Good Quality label 0. This inversion ensures that Sensitivity, as computed by M-Score, measures the Bad Quality detection rate—the operationally critical quantity, since undetected bad-quality segments propagate noise into the diagnostic model. All SQA Se/Sp figures reported in Chapter 5 follow this convention.
-
-### 3.4 Data Augmentation and Class Balancing
-- WeightedRandomSampler 策略
-- 数据增强方法
-
-**Class balancing.** Both datasets exhibit substantial class imbalance. A naive training setup would bias the model toward the majority class, yielding high accuracy but poor minority-class recall—exactly the failure mode that M-Score is designed to penalise. To counteract this, `WeightedRandomSampler` is applied at the DataLoader level: each sample is assigned a weight inversely proportional to its class frequency (weight = 1 / class\_count), and the sampler draws from the training set with replacement according to these weights. This produces balanced mini-batches without duplicating data in memory or modifying the underlying dataset.
-
-**Waveform augmentation.** Augmentation is applied stochastically to each training segment at load time and is disabled entirely for validation and test splits. Five independent augmentation operations are applied in sequence, each with its own trigger probability:
+**Waveform augmentation.** Five stochastic augmentations are applied in sequence to each training segment at load time; validation and test splits receive no augmentation. All operations act on the raw waveform prior to Mel spectrogram extraction.
 
 | Operation | Description | Probability |
-|---|---|---|
-| Random gain | Amplitude scaling by a factor sampled uniformly from [0.8, 1.2] | 0.5 |
-| Gaussian noise | Additive white noise at SNR sampled uniformly from [20, 35] dB | 0.5 |
+|-----------|-------------|:-----------:|
+| Random gain | Amplitude scaling ∈ [0.8, 1.2] | 0.5 |
+| Gaussian noise | Additive white noise, SNR ∈ [20, 35] dB | 0.5 |
 | Time shift | Circular shift by up to ±10% of segment length | 0.5 |
-| Random resampling | Time-stretch by factor sampled from [0.9, 1.1], then re-padded to original length | 0.3 |
-| Polarity inversion | Multiply entire waveform by −1 | 0.5 |
+| Random resampling | Time-stretch by factor ∈ [0.9, 1.1], re-padded to original length | 0.3 |
+| Polarity inversion | Multiply waveform by −1 | 0.5 |
 
-Random gain and polarity inversion simulate variability in probe contact pressure and microphone orientation. Gaussian noise approximates ambient acoustic interference. Time shift and random resampling together increase robustness to recording start-point variability and heart rate fluctuations. All augmentations operate on the raw waveform before the Mel spectrogram is computed, ensuring that the feature extractor sees augmented signal characteristics rather than augmented spectrograms.
+Together these operations simulate variability in probe placement, ambient noise, and heart rate fluctuations encountered in uncontrolled home environments.
 
 ---
 
@@ -97,7 +242,7 @@ Random gain and polarity inversion simulate variability in probe contact pressur
 
 ### 4.1 Overall Architecture
 - 双模型设计思路（SQA + 诊断解耦）
-- 输入格式（1×32×64 Log-Mel 频谱图）
+- 输入格式（1×64×64 Log-Mel 频谱图）
 
 The system deploys two independent model instances in a cascaded inference pipeline: a Signal Quality Assessment (SQA) model and a diagnostic model. Both share the same network architecture but are trained on separate datasets for distinct binary classification tasks.
 
@@ -105,20 +250,20 @@ The SQA model serves as a gating function. Before any cardiac recording reaches 
 
 This decoupled design has two practical advantages. First, it prevents corrupted input from directly biasing the diagnostic output—a critical concern for a device used in uncontrolled home environments. Second, training the two models independently allows each to be optimised for its own class distribution and evaluation criterion, rather than forcing a single model to solve both problems jointly.
 
-Both models accept a log-Mel spectrogram of shape 1×64×64 as input: one channel, 64 Mel frequency bins spanning 20–400 Hz, and 64 time frames corresponding to a 2-second segment at 2 kHz sampling rate with 128-sample hop length. The compact representation keeps inference memory within the constraints of the Raspberry Pi 4B while retaining the frequency-temporal structure that distinguishes normal S1/S2 patterns from pathological sounds.
+Both models accept a log-Mel spectrogram of shape 1×64×64 as input: one channel, 64 Mel frequency bins spanning 25–400 Hz, and 64 time frames corresponding to a 2-second segment at 2 kHz sampling rate with 128-sample hop length. The compact representation keeps inference memory within the constraints of the Raspberry Pi 4B while retaining the frequency-temporal structure that distinguishes normal S1/S2 patterns from pathological sounds.
 
-**Figure 4.1: Cascaded dual-model inference pipeline. An input recording is first evaluated by the SQA model (Model 0); segments of insufficient quality are rejected as "Unsure", while high-quality segments are forwarded to the diagnostic model (Model 1) which produces a Normal or Abnormal classification.**
 ![Fig 4.1](photo-from-PC/双模型.drawio.png)
+**Figure 4.1: Cascaded dual-model inference pipeline. An input recording is first evaluated by the SQA model (Model 0); segments of insufficient quality are rejected as "Unsure", while high-quality segments are forwarded to the diagnostic model (Model 1) which produces a Normal or Abnormal classification.**
 
 ### 4.2 Lightweight CNN Backbone
 - Depthwise Separable Convolution 结构
 - 各层设计（通道数、卷积核大小）
 - 参数量分析
 
-The backbone is a four-stage convolutional network built around the depthwise separable convolution (DSC) primitive [CITE Howard et al., MobileNets, 2017]. A DSC block factorises a standard k×k convolution into two sequential operations: a depthwise convolution that filters each input channel independently with a k×k kernel, followed by a pointwise (1×1) convolution that mixes channels. For C_in input channels, C_out output channels, and kernel size k, this reduces the parameter count from C_in × C_out × k² to C_in × k² + C_in × C_out—a factor of approximately k² = 9 for 3×3 kernels. This makes DSC well-suited to edge deployment where model size directly determines both storage footprint and inference latency.
+The backbone is a four-stage convolutional network built around the depthwise separable convolution (DSC) primitive [2]. A DSC block factorises a standard k×k convolution into two sequential operations: a depthwise convolution that filters each input channel independently with a k×k kernel, followed by a pointwise (1×1) convolution that mixes channels. For $C_\text{in}$ input channels, $C_\text{out}$ output channels, and kernel size $k$, this reduces the parameter count from $C_\text{in} \times C_\text{out} \times k^2$ to $C_\text{in} \times k^2 + C_\text{in} \times C_\text{out}$—a factor of approximately $k^2 = 9$ for 3×3 kernels. This makes DSC well-suited to edge deployment where model size directly determines both storage footprint and inference latency.
 
-**Figure 4.2: Standard convolution vs depthwise separable convolution. A standard k×k convolution (top) convolves all C_in input channels simultaneously; a DSC (bottom) factors this into a per-channel depthwise convolution followed by a 1×1 pointwise convolution that mixes channels, reducing the parameter count by a factor of approximately k².**
 ![Fig 4.2](<Paper Photo/depthwise-separable-convolution.png>)
+**Figure 4.2: Standard convolution vs depthwise separable convolution. A standard k×k convolution (top) convolves all $C_\text{in}$ input channels simultaneously; a DSC (bottom) factors this into a per-channel depthwise convolution followed by a 1×1 pointwise convolution that mixes channels, reducing the parameter count by a factor of approximately $k^2$. Figure reproduced from [3].**
 
 The network begins with a single standard 3×3 convolutional layer that projects the single-channel input to 32 feature maps. This initial layer uses a full convolution because the input has only one channel, making the depthwise factorisation trivial. Three subsequent DSC stages progressively double the channel count while halving the spatial resolution via 2×2 max-pooling. A global average pooling layer collapses the spatial dimensions to a 256-dimensional vector, which passes through a dropout layer (rate 0.3) and a linear classifier.
 
@@ -135,20 +280,20 @@ The network begins with a single standard 3×3 convolutional layer that projects
 
 The total trainable parameter count is approximately 65.12K. The quantized INT8 TFLite model occupies 144.7 KB on disk.
 
-**Figure 4.3: LightweightCNN architecture visualisation. Each block represents one convolutional stage; spatial dimensions decrease from left to right (64×64 → 32×32 → 16×16 → 8×8) while the number of feature channels doubles at each stage (32 → 64 → 128 → 256). CoordAtt is inserted after the pointwise convolution at each DSC stage. The final arrow denotes global average pooling followed by the linear classifier.**
 ![Fig 4.3](photo-from-PC/fig4_1_architecture_flat.png)
+**Figure 4.3: LightweightCNN architecture visualisation. Each block represents one convolutional stage; spatial dimensions decrease from left to right (64×64 → 32×32 → 16×16 → 8×8) while the number of feature channels doubles at each stage (32 → 64 → 128 → 256). CoordAtt is inserted after the pointwise convolution at each DSC stage. The final arrow denotes global average pooling followed by the linear classifier.**
 
 ### 4.3 Coordinate Attention Module
 - 设计动机（为什么用 CoordAtt 而不是 SE Block）
 - 模块结构（H/W 方向分离的空间注意力）
 - 在模型中的插入位置
 
-Each DSC block in layers 2–4 integrates a Coordinate Attention (CoordAtt) module [CITE Hou et al., CVPR 2021] inserted after the pointwise convolution.
+Each DSC block in layers 2–4 integrates a Coordinate Attention (CoordAtt) module [4] inserted after the pointwise convolution.
 
-The design choice is motivated by a limitation of the Squeeze-and-Excitation (SE) block [CITE Hu et al., CVPR 2018], the most widely adopted channel attention mechanism. SE computes a global descriptor by average-pooling the entire spatial feature map into a single C-dimensional vector, then uses it to rescale channel responses. This operation is spatially blind: it encodes which channels matter globally but discards where within the feature map the relevant activations occur. For heart sound spectrograms, spatial position carries diagnostic information. S1 and S2 energy concentrates in specific frequency bands (predominantly below 200 Hz) and at characteristic temporal positions within the cardiac cycle; pathological murmurs occupy frequency ranges that differ from normal sounds. An attention mechanism that ignores spatial structure cannot selectively amplify these localised cues.
+The design choice is motivated by a limitation of the Squeeze-and-Excitation (SE) block [5], the most widely adopted channel attention mechanism. SE computes a global descriptor by average-pooling the entire spatial feature map into a single C-dimensional vector, then uses it to rescale channel responses. This operation is spatially blind: it encodes which channels matter globally but discards where within the feature map the relevant activations occur. For heart sound spectrograms, spatial position carries diagnostic information. S1 and S2 energy concentrates in specific frequency bands (predominantly below 200 Hz) and at characteristic temporal positions within the cardiac cycle; pathological murmurs occupy frequency ranges that differ from normal sounds. An attention mechanism that ignores spatial structure cannot selectively amplify these localised cues.
 
-**Figure 4.4: Comparison of channel and spatial attention mechanisms. (a) SE block: global average pooling collapses the entire spatial map into a single C-dimensional descriptor, discarding positional information. (b) CBAM: augments SE with a spatial branch that uses channel pooling and a 7×7 convolution. (c) CoordAtt: decomposes pooling independently along H and W axes, preserving positional context along each direction. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
 ![[Paper Photo/Comparison to Squeeze-and-Excitation block abd CBAM.png]]
+**Figure 4.4: Comparison of channel and spatial attention mechanisms. (a) SE block: global average pooling collapses the entire spatial map into a single C-dimensional descriptor, discarding positional information. (b) CBAM: augments SE with a spatial branch that uses channel pooling and a 7×7 convolution. (c) CoordAtt: decomposes pooling independently along H and W axes, preserving positional context along each direction. Figure reproduced from Hou et al. [4].**
 
 
 CoordAtt retains positional information by decomposing spatial pooling along the two axes independently. Given a feature map $\mathbf{X} \in \mathbb{R}^{N \times C \times H \times W}$, the module proceeds as follows:
@@ -161,23 +306,19 @@ CoordAtt retains positional information by decomposing spatial pooling along the
 
 4. **Recalibration.** The output is $\mathbf{X} \cdot \mathbf{a}_h \cdot \mathbf{a}_w$. Because $\mathbf{a}_h$ varies along the frequency axis and $\mathbf{a}_w$ varies along the time axis, their elementwise product creates a 2D attention map that weights each spatial location according to both frequency and temporal position—without collapsing either axis.
 
-**Figure 4.5: Coordinate Attention mechanism structure. The input feature map is pooled along the height and width axes independently (X Avg Pool, Y Avg Pool), concatenated and jointly encoded via a shared 1×1 convolution, then split and projected with separate sigmoid activations to produce axis-specific attention weights. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
 ![[Paper Photo/Coordinate-Attention.png]]
+**Figure 4.5: Coordinate Attention mechanism structure. The input feature map is pooled along the height and width axes independently (X Avg Pool, Y Avg Pool), concatenated and jointly encoded via a shared 1×1 convolution, then split and projected with separate sigmoid activations to produce axis-specific attention weights. Figure reproduced from Cao et al. [6].**
 
-**Figure 4.6: Integration of Coordinate Attention into depthwise separable convolution blocks. (a) CA inserted after the depthwise convolution in an inverted residual block; (b) CA inserted after the depthwise convolution in a plain DSC block, as used in this work. Figure reproduced from Hou et al. [CITE Hou et al., CVPR 2021].**
 ![[Paper Photo/How to plug the proposed CA block in the inverted residual block abd the sunglass block.png]]
+**Figure 4.6: Integration of Coordinate Attention into depthwise separable convolution blocks. (a) CA inserted after the depthwise convolution in an inverted residual block; (b) CA inserted after the depthwise convolution in a plain DSC block, as used in this work. Figure reproduced from Hou et al. [4].**
 
 The additional parameter cost per CoordAtt block is small: approximately 1.6K, 3.1K, and 12.3K at layers 2, 3, and 4 respectively, modest relative to the DSC blocks they augment.
 
 ### 4.4 Signal Quality Assessment Model
-- SQA 模型结构（与诊断模型的异同）
-- 在推理 pipeline 中的作用
 
-The SQA model is architecturally identical to the diagnostic model: the same four-stage backbone, the same CoordAtt integration at each DSC block, and the same classifier head. It is trained independently on a quality-labelled dataset of 3,240 recordings with an approximately 8:1 Good/Bad Quality class ratio, using the same WeightedRandomSampler strategy to compensate for class imbalance.
+A joint multi-task formulation with a shared backbone and two classification heads was considered but rejected on the grounds of feature conflict. Acoustic artefacts in low-quality recordings—broadband noise, contact friction, and motion transients—produce spectrogram patterns that partially overlap with pathological murmurs in the mid-frequency range. Under joint training, the SQA and diagnostic objectives would impose conflicting gradient signals on the shared representation for this overlapping pattern class, likely degrading both tasks. Training the two models independently allows each to develop a representation optimised for its own label space without interference.
 
-Sharing the architecture with the diagnostic model has a practical benefit beyond simplicity: both models are quantized, loaded, and executed under the same TFLite inference pipeline on the Raspberry Pi, with no additional engineering required to accommodate a structurally different gating network.
-
-At inference time, the SQA model processes the same 1×32×64 log-Mel input as the diagnostic model. Rather than applying a binary accept/reject threshold, the SQA output probability P(Good) for each segment is used directly as a continuous weight in the final aggregation step. Across a recording session, the diagnostic model's predicted Abnormal probability for each segment is weighted by its corresponding P(Good) score and averaged to produce the final diagnostic decision. Segments of low acoustic quality therefore contribute less to the final result rather than being hard-rejected, which avoids discarding borderline-quality segments entirely while still down-weighting their influence. This design eliminates the need for threshold tuning on the SQA output: the continuous probability is itself the operationally useful quantity.
+The SQA model therefore shares the same LightweightCNN + CoordAtt architecture as the diagnostic model—identical backbone, attention integration, and classifier head—and is trained independently on the quality-labelled dataset described in Section 3.1. Using a shared architecture means both models run under the same TFLite inference pipeline on the Raspberry Pi with no additional engineering overhead. At inference time, the SQA model produces a Good-Quality probability P(Good) ∈ [0, 1] per segment; this value is used directly as a continuous weight in the diagnostic aggregation step rather than as a binary gate, so borderline-quality segments down-weight the final result rather than being discarded entirely.
 
 ### 4.5 Model Quantization
 - FP32 → INT8 量化方案（Post-Training Quantization）
@@ -209,8 +350,8 @@ $$M\text{-}Score = \frac{Se + Sp}{2}$$
 
 where Sensitivity $Se = \frac{TP}{TP + FN}$ measures the fraction of abnormal recordings correctly identified, and Specificity $Sp = \frac{TN}{TN + FP}$ measures the fraction of normal recordings correctly identified. M-Score is preferred over accuracy because accuracy can reach 80% by predicting all recordings as Normal, while yielding $Se = 0$ and $\text{M-Score} = 0.5$. All models are saved and compared by M-Score.
 
-**Figure 5.1: Confusion matrix structure and evaluation metrics. TP: abnormal correctly identified; FN: abnormal misclassified as normal; FP: normal misclassified as abnormal; TN: normal correctly identified. Sensitivity (Se), Specificity (Sp), and M-Score are derived from these four quantities.**
 ![Fig 5.1](photo-from-PC/fig_confusion_concept.png)
+**Figure 5.1: Confusion matrix structure and evaluation metrics. TP: abnormal correctly identified; FN: abnormal misclassified as normal; FP: normal misclassified as abnormal; TN: normal correctly identified. Sensitivity (Se), Specificity (Sp), and M-Score are derived from these four quantities.**
 
 ### 5.2 Diagnostic Model Results
 - Run 1 基础训练结果
@@ -239,12 +380,12 @@ Several consistent patterns emerge across runs. First, label smoothing (Run 2 vs
 
 **Run 6** achieves the highest test M-Score (0.8903) and is selected as the final model. Its preprocessing parameters (n\_mels = 64, hop = 128) were identified by a 40-trial Bayesian hyperparameter search (Section 5.2.2), and the batch size was set to 16 based on the empirical comparison above.
 
-**Figure 5.2: Training loss and validation M-Score across epochs for Run 6 (final diagnostic model).**
 ![Fig 5.2](photo-from-PC/fig5_1_training_curve.png)
+**Figure 5.2: Training loss and validation M-Score across epochs for Run 6 (final diagnostic model).**
 
-**Figure 5.3: Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
 ![Fig 5.3a](photo-from-PC/confusion_matrix_diag.png)
 ![Fig 5.3b](photo-from-PC/confusion_matrix_diag_trainpc.png)
+**Figure 5.3: Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
 
 #### 5.2.2 Hyperparameter Search
 
@@ -258,13 +399,13 @@ A Bayesian sweep over 40 trials was conducted using Weights & Biases, optimising
 | 2 | 0.9031 | 0.9677 | 0.8386 | 64 | 96 | 256 | 0.75 | 1e-3 | 1e-3 |
 | 3 | 0.9000 | 0.9539 | 0.8462 | 64 | 128 | 256 | 0.75 | 1e-3 | 1e-3 |
 
-The configuration n\_mels = 64, n\_fft = 256, overlap = 0.75, lr = 1×10⁻³ appears consistently across the top trials, indicating a stable optimal region. The selected parameters for the final model are n\_mels = 64, hop = 128, n\_fft = 256, weight\_decay = 1×10⁻³.
+The configuration $n_\text{mels}$ = 64, $n_\text{fft}$ = 256, overlap = 0.75, lr = 1×10⁻³ appears consistently across the top trials, indicating a stable optimal region. The selected parameters for the final model are $n_\text{mels}$ = 64, hop length = 128, $n_\text{fft}$ = 256, weight decay = 1×10⁻³.
 
-**Figure 5.4: Distribution of validation M-Score across all 40 hyperparameter sweep trials.**
 ![Fig 5.4](photo-from-PC/fig5_sweep_boxplot.png)
+**Figure 5.4: Distribution of validation M-Score across all 40 hyperparameter sweep trials.**
 
-**Figure 5.5: Validation M-Score for the top-performing sweep configurations.**
 ![Fig 5.5](photo-from-PC/fig5_sweep_boxplot_best.png)
+**Figure 5.5: Validation M-Score for the top-performing sweep configurations.**
 
 #### 5.2.3 Decision Threshold Analysis
 
@@ -286,8 +427,8 @@ The default classification threshold of 0.5 was evaluated against a sweep from 0
 
 The optimal threshold (0.45) improves M-Score by only 0.0007 over the default 0.50, confirming that the Se/Sp imbalance is a property of the learned decision boundary rather than a post-processing artefact. The default threshold of 0.50 is retained for deployment, as it provides the highest Se (0.9569), which is the more clinically critical metric in a home screening context.
 
-**Figure 5.6: Se, Sp, and M-Score as a function of classification threshold on the Run 1 test set.**
 ![Fig 5.6](photo-from-PC/fig5_3_threshold.png)
+**Figure 5.6: Se, Sp, and M-Score as a function of classification threshold on the Run 1 test set.**
 
 ### 5.3 SQA Model Results
 - 训练结果（Test M-Score / Se / Sp）
@@ -332,12 +473,12 @@ The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K par
 | Test Accuracy | 0.8541 | 0.8046 |
 | Class imbalance | 4:1 | 8:1 |
 
-**Figure 5.7: SQA model M-Score, Se, and Sp across three training runs.**
 ![Fig 5.7](photo-from-PC/fig5_4_sqa_runs.png)
+**Figure 5.7: SQA model M-Score, Se, and Sp across three training runs.**
 
-**Figure 5.8: Confusion matrix for the final SQA model (Run 3) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
 ![Fig 5.8a](photo-from-PC/confusion_matrix_sqa.png)
 ![Fig 5.8b](photo-from-PC/confusion_matrix_sqa_trainpc.png)
+**Figure 5.8: Confusion matrix for the final SQA model (Run 3) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
 
 The persistent Val→Test Se gap of approximately 0.048 across Runs 2 and 3 indicates that the generalisation ceiling is constrained by the small Bad-class population (364 recordings total; roughly 36 recordings in the test split), rather than by the training configuration. Further Se improvement would require additional bad-quality data. The Sp of 0.8029 means approximately 20% of good-quality recordings receive a lower P(Good) weight in the inference aggregation; this reduces effective signal volume but does not introduce noise into the diagnostic stage, and is considered acceptable given the deployment context.
 
@@ -347,7 +488,7 @@ The persistent Val→Test Se gap of approximately 0.048 across Runs 2 and 3 indi
 - + Residual Connection
 - 各步骤指标对比
 
-To quantify the contribution of each architectural component, four model variants were trained under identical conditions: the same dataset split, preprocessing parameters (n\_mels = 32, hop = 96, n\_fft = 256, overlap = 0.5), training hyperparameters (batch = 16, lr = 1×10⁻³, weight\_decay = 1×10⁻⁴, early stopping patience = 10), and class balancing strategy. The variants form a cumulative chain, each adding one modification to the previous.
+To quantify the contribution of each architectural component, four model variants were trained under identical conditions: the same dataset split, preprocessing parameters ($n_\text{mels}$ = 32, hop length = 96, $n_\text{fft}$ = 256, overlap = 0.5), training hyperparameters (batch = 16, lr = 1×10⁻³, weight decay = 1×10⁻⁴, early stopping patience = 10), and class balancing strategy. The variants form a cumulative chain, each adding one modification to the previous.
 
 **Table 5.4: Ablation study results. All variants trained on the same fixed test split.**
 
@@ -364,8 +505,8 @@ To quantify the contribution of each architectural component, four model variant
 
 **C → D: Residual connections.** Residual connections yield the highest test M-Score (0.8912, +0.004 over C), driven by a large Se increase (+0.041). However, Sp drops to 0.8027—lower than any other variant—and the best epoch regresses to 2, suggesting that residual connections accelerate convergence at the cost of reinforcing the model's tendency to over-predict Abnormal. The Se/Sp gap widens to 0.177.
 
-**Figure 5.9: Ablation study — M-Score, Sensitivity, and Specificity across four model configurations.**
 ![Fig 5.9](photo-from-PC/fig5_2_ablation.png)
+**Figure 5.9: Ablation study — M-Score, Sensitivity, and Specificity across four model configurations.**
 
 **Architecture selection.** Config C is selected as the final architecture. While D achieves the highest M-Score, its Se/Sp imbalance (0.177 gap) is worse than A (0.161) and substantially worse than C (0.103). In a home screening device where missed abnormal cases carry greater clinical risk than false alarms, Se is more important than Sp—but the magnitude of Sp degradation in D (0.8027, a 32.8% false alarm rate on normal recordings) is considered unacceptable for a practical device. Config C provides the best balance across all three criteria: Se/Sp balance, training stability, and parameter efficiency.
 
@@ -387,8 +528,8 @@ Accuracy degradation is negligible: M-Score drops by only 0.1 percentage point (
 
 The latency reduction is similarly marginal (13.44 ms → 13.43 ms, −0.1%). This is expected for dynamic range quantization, which compresses weights to INT8 at export time but leaves activations at float32 at runtime. The absence of statically-quantized activations means the ARM Cortex-A72 cannot execute true INT8 GEMM operations; the latency saving comes only from reduced memory bandwidth for weight loading, not from integer arithmetic acceleration. Full integer quantization—where both weights and activations are fixed at INT8—would be needed to realise arithmetic-level speedup.
 
-**Figure 5.10: FP32 vs INT8 model size comparison for diagnostic and SQA models.**
 ![Fig 5.10](photo-from-PC/fig6_3_model_size.png)
+**Figure 5.10: FP32 vs INT8 model size comparison for diagnostic and SQA models.**
 
 ---
 
@@ -398,8 +539,8 @@ The latency reduction is similarly marginal (13.44 ms → 13.43 ms, −0.1%). Th
 
 The deployed system consists of two physical units: an ESP32-based acquisition device and a Raspberry Pi 4B inference station, communicating exclusively over Bluetooth Low Energy (BLE). The separation of concerns between the two units is deliberate: the ESP32 handles only signal capture and wireless transmission, keeping its firmware simple and power-efficient, while all computation-intensive processing—filtering, feature extraction, and model inference—runs on the Pi.
 
-**Figure 6.1: System architecture overview. The ESP32 captures audio via I²S, decimates to 2 kHz, and streams PCM data over BLE. The Raspberry Pi 4B receives the stream and runs the full inference pipeline (preprocessing → SQA → diagnostic model), with results stored to WAV/CSV/JSON and displayed on peripheral outputs. A watchdog process ensures continuous operation.**
 ![Fig 6.1](photo-from-PC/fig_system_diagram.png)
+**Figure 6.1: System architecture overview. The ESP32 captures audio via I²S, decimates to 2 kHz, and streams PCM data over BLE. The Raspberry Pi 4B receives the stream and runs the full inference pipeline (preprocessing → SQA → diagnostic model), with results stored to WAV/CSV/JSON and displayed on peripheral outputs. A watchdog process ensures continuous operation.**
 
 **ESP32 (acquisition side).** An INMP441 MEMS digital microphone connects to the ESP32 via I²S. The I²S peripheral is configured at 8,000 Hz with 16-bit receive width (the INMP441's native 24-bit output is truncated to the lower 16 bits). Before downsampling, a DC-removal stage (sliding mean over 1,000 samples) eliminates baseline drift, and a 2nd-order IIR anti-aliasing low-pass filter (cutoff ≈ 800 Hz at 8 kHz) is applied to prevent spectral folding. A 4:1 decimation stage then reduces the rate to 2,000 Hz. A 30× digital gain with ±32,767 clipping compensates for the INMP441's low raw output level. The resulting 16-bit PCM samples (little-endian, mono) are placed into a ping-pong double buffer to decouple the sampling timer from the BLE stack, ensuring no samples are dropped at packet boundaries. Each BLE notification carries 128 bytes (64 samples), giving one packet every 32 ms at the 2,000 Hz operating rate. The ESP32 runs a GATT server exposing a single custom notify characteristic (UUID `beb5483e-36e1-4688-b7f5-ea07361b26a8`); after disconnect it immediately restarts advertisement, making reconnection transparent to the user.
 
@@ -409,7 +550,7 @@ The deployed system consists of two physical units: an ESP32-based acquisition d
 
 **Acquisition protocol.** The system operates in continuous streaming mode. Each diagnostic session is initiated by a short button press and runs until the user presses the button again to stop. BLE audio data accumulates in 20-second chunks (`CHUNK_DURATION = 20 s`, `CHUNK_BYTES = 80,000`). Within each chunk, a sliding window of 2 seconds with 50% overlap (`HOP_SAMPLES = 2,000` samples = 1 s) is applied, yielding 19 overlapping windows per chunk. The chunk granularity balances responsiveness against scheduling overhead: each chunk is dispatched as a single unit to the inference worker, keeping the asyncio event loop unblocked during BLE reception while still delivering a fresh result roughly every 20 seconds.
 
-**Preprocessing on-device.** The 20-second chunk (40,000 int16 samples) is converted to float32 by dividing by 32,768, then passed through a 5th-order Butterworth bandpass filter (25–400 Hz, zero-phase) in one pass. Each 2-second sliding window (4,000 samples) is then extracted and peak-normalised independently: the window is divided by its maximum absolute value, preventing any single noise spike from suppressing the entire chunk. Log-Mel spectrogram extraction is applied per window (n\_mels = 64, n\_fft = 256, hop\_length = 128, fmin = 20 Hz, fmax = 400 Hz, power = 2.0). The time axis is zero-padded or trimmed to a fixed length of 64 frames, yielding a 64 × 64 feature map. This is reshaped to tensor shape (1, 1, 64, 64) for TFLite input.
+**Preprocessing on-device.** The 20-second chunk (40,000 int16 samples) is converted to float32 by dividing by 32,768, then passed through a 5th-order Butterworth bandpass filter (25–400 Hz, zero-phase) in one pass. Each 2-second sliding window (4,000 samples) is then extracted and peak-normalised independently: the window is divided by its maximum absolute value, preventing any single noise spike from suppressing the entire chunk. Log-Mel spectrogram extraction is applied per window ($n_\text{mels}$ = 64, $n_\text{fft}$ = 256, hop length = 128, $f_\text{min}$ = 25 Hz, $f_\text{max}$ = 400 Hz, power = 2.0). The time axis is zero-padded or trimmed to a fixed length of 64 frames, yielding a 64 × 64 feature map. This is reshaped to tensor shape (1, 1, 64, 64) for TFLite input.
 
 **Cascaded TFLite inference.** Each window is independently processed by two INT8 quantized TFLite models loaded at startup. The SQA model runs first, producing a Good-Quality probability P(Good) ∈ [0, 1]. Windows with P(Good) < 0.6 are rejected as acoustically degraded and excluded from inference. For windows that pass the SQA gate, the diagnostic model runs on the same feature tensor, producing a Normal probability P(Normal) ∈ [0, 1]. The chunk-level result aggregates all valid windows through a quality-weighted average:
 
@@ -452,8 +593,8 @@ This section reports inference latency, resource utilisation, and quantization a
 
 The bandpass filter and Log-Mel spectrogram are implemented as NumPy operations and are not subject to TFLite quantization; their latency is identical across both configurations. Quantization reduces latency only for the two TFLite model stages, though the improvement is marginal (under 0.1 ms per stage) because dynamic range quantization quantizes weights statically but leaves activations at runtime float, yielding limited arithmetic speedup on the ARM Cortex-A72 compared to full integer quantization.
 
-**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs). Preprocessing stages are unaffected by quantization.**
 ![Fig 6.2](photo-from-PC/fig6_2_latency.png)
+**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8 (median of 100 runs). Preprocessing stages are unaffected by quantization.**
 
 **Table 6.2: Resource utilisation during a continuous session (single 20-second chunk, INT8 models).**
 
@@ -519,3 +660,19 @@ Edge deployment introduces failure modes absent from server environments: interm
 ### 7.1 Summary of Contributions
 ### 7.2 Limitations
 ### 7.3 Future Work
+
+---
+
+## REFERENCES
+
+[1] G. D. Clifford, C. Liu, B. Moody, D. Springer, I. Silva, Q. Li, and R. G. Mark, "Classification of Normal/Abnormal Heart Sound Recordings: the PhysioNet/Computing in Cardiology Challenge 2016," *Computing in Cardiology*, vol. 43, pp. 609–612 (2016).
+
+[2] Howard, A.G., Zhu, M., Chen, B., Kalenichenko, D., Wang, W., Weyand, T., Andreetto, M., Adam, H., "MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications," *arXiv preprint arXiv:1704.04861* (2017).
+
+[3] N. S. Punn and S. Agarwal, "CHS-Net: A Deep Learning Approach for Hierarchical Segmentation of COVID-19 Infected CT Images," *arXiv preprint arXiv:2012.07079* (2020).
+
+[4] Hou, Q., Zhou, D., Feng, J., "Coordinate Attention for Efficient Mobile Network Design," in *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)*, pp. 13713–13722 (2021).
+
+[5] Hu, J., Shen, L., Sun, G., "Squeeze-and-Excitation Networks," in *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, pp. 7132–7141 (2018).
+
+[6] Cao, Y., Li, C., Peng, Y., Ru, H., "MCS-YOLO: A Multiscale Object Detection Method for Autonomous Driving Road Environment Recognition," *IEEE Access*, vol. PP, pp. 1–1 (2023). DOI: 10.1109/ACCESS.2023.3252021.

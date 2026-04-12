@@ -64,13 +64,13 @@
 
 
 
-- **深度可分离卷积 (DSConv)**: 需引用 MobileNet 论文。
+- **深度可分离卷积 (DSConv)**: 
     
     - _格式示例_：图 2.x 深度可分离卷积结构示意图 [1]。
         
     - _对应文献_：CHS-Net: A Deep learning approach for hierarchical segmentation of COVID-19 infected CT images - Scientific Figure on ResearchGate. Available from: https://www.researchgate.net/figure/Standard-convolution-operation-vs-depthwise-separable-convolution-operation_fig4_347125085 [accessed 10 Apr 2026]
         
-- **坐标注意力机制 (CoordAtt)**: 需引用 Hou 等人的论文。
+- **坐标注意力机制 (CoordAtt)**: 
     
     - _格式示例_：图 2.x 坐标注意力模块结构图 [2]。
         
