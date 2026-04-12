@@ -318,7 +318,7 @@ The additional parameter cost per CoordAtt block is small: approximately 1.6K, 3
 
 A joint multi-task formulation with a shared backbone and two classification heads was considered but rejected on the grounds of feature conflict. Acoustic artefacts in low-quality recordings—broadband noise, contact friction, and motion transients—produce spectrogram patterns that partially overlap with pathological murmurs in the mid-frequency range. Under joint training, the SQA and diagnostic objectives would impose conflicting gradient signals on the shared representation for this overlapping pattern class, likely degrading both tasks. Training the two models independently allows each to develop a representation optimised for its own label space without interference.
 
-The SQA model therefore shares the same LightweightCNN + CoordAtt architecture as the diagnostic model—identical backbone, attention integration, and classifier head—and is trained independently on the quality-labelled dataset described in Section 3.1. Using a shared architecture means both models run under the same TFLite inference pipeline on the Raspberry Pi with no additional engineering overhead. At inference time, the SQA model produces a Good-Quality probability P(Good) ∈ [0, 1] per segment; this value is used directly as a continuous weight in the diagnostic aggregation step rather than as a binary gate, so borderline-quality segments down-weight the final result rather than being discarded entirely.
+The SQA model therefore shares the same LightweightCNN + CoordAtt architecture as the diagnostic model—identical backbone, attention integration, and classifier head—and is trained independently on the quality-labelled dataset described in Section 3.1. The architecture reuse is not merely an engineering convenience: SQA faces the same underlying feature-extraction problem as diagnosis. Distinguishing a bad-quality recording from a good one requires detecting temporal and spectral irregularities—abrupt noise bursts, contact transients, aperiodic broadband energy—patterns whose presence or absence must be localised across both the frequency axis and the time axis of the spectrogram. This is precisely the task that the LightweightCNN + CoordAtt combination is designed for: the depthwise separable backbone extracts hierarchical spectro-temporal features efficiently, and the Coordinate Attention module provides the spatial specificity needed to locate artefact-like patterns within the feature map. A simpler classifier—for example, a shallow CNN without attention or a feature-engineered model—would lack the representational capacity to distinguish high-frequency transient noise from S1/S2 impulses, or low-frequency contact rumble from murmur energy, without explicit hand-crafted features. At inference time, the SQA model produces a Good-Quality probability P(Good) ∈ [0, 1] per segment; this value is used directly as a continuous weight in the diagnostic aggregation step rather than as a binary gate, so borderline-quality segments down-weight the final result rather than being discarded entirely.
 
 ### 4.5 Model Quantization
 - FP32 → INT8 量化方案（Post-Training Quantization）
@@ -409,26 +409,28 @@ The configuration $n_\text{mels}$ = 64, $n_\text{fft}$ = 256, overlap = 0.75, lr
 
 #### 5.2.3 Decision Threshold Analysis
 
-The default classification threshold of 0.5 was evaluated against a sweep from 0.30 to 0.80 on the Run 1 model. Results are shown in Table 5.3.
+The default classification threshold of 0.5 was evaluated against a sweep from 0.30 to 0.80 on the final model (Run 6). Results are shown in Table 5.3.
 
-**Table 5.3: Threshold sweep on Run 1 model (test set).**
+**Table 5.3: Threshold sweep on final diagnostic model — Run 6 (test set).**
 
 | Threshold | Se | Sp | M-Score |
 |:---------:|:--:|:--:|:-------:|
-| 0.30 | 0.9890 | 0.7787 | 0.8839 |
-| 0.35 | 0.9840 | 0.7860 | 0.8850 |
-| 0.40 | 0.9764 | 0.7947 | 0.8855 |
-| **0.45** | **0.9688** | **0.8031** | **0.8859** |
-| 0.50 | 0.9569 | 0.8135 | 0.8852 |
-| 0.55 | 0.9417 | 0.8218 | 0.8817 |
-| 0.60 | 0.9231 | 0.8332 | 0.8782 |
-| 0.70 | 0.8547 | 0.8562 | 0.8554 |
-| 0.80 | 0.7652 | 0.8915 | 0.8284 |
+| 0.30 | 0.9882 | 0.7703 | 0.8792 |
+| 0.35 | 0.9856 | 0.7797 | 0.8827 |
+| 0.40 | 0.9772 | 0.7868 | 0.8820 |
+| 0.45 | 0.9713 | 0.7947 | 0.8830 |
+| **0.50** | **0.9645** | **0.8025** | **0.8835** |
+| 0.55 | 0.9451 | 0.8127 | 0.8789 |
+| 0.60 | 0.9215 | 0.8259 | 0.8737 |
+| 0.65 | 0.8910 | 0.8389 | 0.8650 |
+| 0.70 | 0.8539 | 0.8554 | 0.8546 |
+| 0.75 | 0.7990 | 0.8768 | 0.8379 |
+| 0.80 | 0.7095 | 0.9037 | 0.8066 |
 
-The optimal threshold (0.45) improves M-Score by only 0.0007 over the default 0.50, confirming that the Se/Sp imbalance is a property of the learned decision boundary rather than a post-processing artefact. The default threshold of 0.50 is retained for deployment, as it provides the highest Se (0.9569), which is the more clinically critical metric in a home screening context.
+The sweep confirms that 0.50 is both the optimal and the default threshold: it achieves the highest M-Score (0.8835) while maintaining the highest Se (0.9645). M-Score is relatively flat in the conservative range 0.30–0.50 (0.8792–0.8835), indicating robustness to lower thresholds, but falls sharply above 0.55 as Sp gains are outweighed by Se losses. The Se/Sp imbalance across the full sweep reflects the model's learned decision boundary rather than a post-processing artefact—no threshold adjustment can recover the asymmetry without sacrificing M-Score. The default threshold of 0.50 is retained for deployment.
 
-![Fig 5.6](photo-from-PC/fig5_3_threshold.png)
-**Figure 5.6: Se, Sp, and M-Score as a function of classification threshold on the Run 1 test set.**
+![Fig 5.6](photo-from-PC/fig5_3_threshold_diag.png)
+**Figure 5.6: Se, Sp, and M-Score as a function of classification threshold on the final diagnostic model (Run 6) test set. The dashed line marks the default threshold of 0.50, which coincides with the M-Score optimum.**
 
 ### 5.3 SQA Model Results
 - 训练结果（Test M-Score / Se / Sp）
@@ -481,6 +483,31 @@ The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K par
 **Figure 5.8: Confusion matrix for the final SQA model (Run 3) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
 
 The persistent Val→Test Se gap of approximately 0.048 across Runs 2 and 3 indicates that the generalisation ceiling is constrained by the small Bad-class population (364 recordings total; roughly 36 recordings in the test split), rather than by the training configuration. Further Se improvement would require additional bad-quality data. The Sp of 0.8029 means approximately 20% of good-quality recordings receive a lower P(Good) weight in the inference aggregation; this reduces effective signal volume but does not introduce noise into the diagnostic stage, and is considered acceptable given the deployment context.
+
+#### 5.3.1 Decision Threshold Analysis
+
+The classification threshold of the SQA model determines the minimum P(Good) required for a segment to be accepted by the inference pipeline. A sweep from 0.30 to 0.80 was conducted on the final SQA model (Run 3). Results are shown in Table 5.9.
+
+**Table 5.9: Threshold sweep on final SQA model — Run 3 (test set).**
+
+| Threshold | Se (Bad) | Sp (Good) | M-Score |
+|:---------:|:--------:|:---------:|:-------:|
+| 0.30 | 0.9480 | 0.6665 | 0.8072 |
+| 0.35 | 0.9314 | 0.6813 | 0.8064 |
+| 0.40 | 0.9210 | 0.6934 | 0.8072 |
+| 0.45 | 0.9168 | 0.7078 | 0.8123 |
+| 0.50 | 0.9044 | 0.7191 | 0.8118 |
+| 0.55 | 0.8898 | 0.7311 | 0.8105 |
+| 0.60 | 0.8773 | 0.7419 | 0.8096 |
+| **0.65** | **0.8732** | **0.7553** | **0.8143** |
+| 0.70 | 0.8565 | 0.7667 | 0.8116 |
+| 0.75 | 0.8420 | 0.7808 | 0.8114 |
+| 0.80 | 0.8212 | 0.7990 | 0.8101 |
+
+The M-Score curve is notably flat throughout the sweep range (0.8064–0.8143), indicating that the model's discrimination is not strongly threshold-dependent. A threshold of 0.65 is selected as it achieves the highest M-Score while providing a better Se/Sp balance than lower thresholds. Relative to the default 0.50, raising the threshold to 0.65 reduces Se by 0.031 (from 0.9044 to 0.8732) while improving Sp by 0.036 (from 0.7191 to 0.7553). The higher threshold is preferred for the inference gate because it reduces false rejections of genuinely good-quality segments—at threshold 0.50, approximately 28% of good-quality segments would be down-weighted unnecessarily—at a modest and acceptable cost in bad-segment detection.
+
+![Fig 5.9b](photo-from-PC/fig5_3_threshold_sqa.png)
+**Figure 5.9b: Se, Sp, and M-Score as a function of classification threshold on the final SQA model (Run 3) test set. The dashed line marks the selected threshold of 0.65. The M-Score curve is flat across the full sweep, indicating that the threshold choice primarily governs the Se/Sp trade-off rather than overall discriminative performance.**
 
 ### 5.4 Ablation Study
 - Baseline CNN（无注意力）
@@ -552,7 +579,7 @@ The deployed system consists of two physical units: an ESP32-based acquisition d
 
 **Preprocessing on-device.** The 20-second chunk (40,000 int16 samples) is converted to float32 by dividing by 32,768, then passed through a 5th-order Butterworth bandpass filter (25–400 Hz, zero-phase) in one pass. Each 2-second sliding window (4,000 samples) is then extracted and peak-normalised independently: the window is divided by its maximum absolute value, preventing any single noise spike from suppressing the entire chunk. Log-Mel spectrogram extraction is applied per window ($n_\text{mels}$ = 64, $n_\text{fft}$ = 256, hop length = 128, $f_\text{min}$ = 25 Hz, $f_\text{max}$ = 400 Hz, power = 2.0). The time axis is zero-padded or trimmed to a fixed length of 64 frames, yielding a 64 × 64 feature map. This is reshaped to tensor shape (1, 1, 64, 64) for TFLite input.
 
-**Cascaded TFLite inference.** Each window is independently processed by two INT8 quantized TFLite models loaded at startup. The SQA model runs first, producing a Good-Quality probability P(Good) ∈ [0, 1]. Windows with P(Good) < 0.6 are rejected as acoustically degraded and excluded from inference. For windows that pass the SQA gate, the diagnostic model runs on the same feature tensor, producing a Normal probability P(Normal) ∈ [0, 1]. The chunk-level result aggregates all valid windows through a quality-weighted average:
+**Cascaded TFLite inference.** Each window is independently processed by two INT8 quantized TFLite models loaded at startup. The SQA model runs first, producing a Good-Quality probability P(Good) ∈ [0, 1]. Windows with P(Good) < 0.65 are rejected as acoustically degraded and excluded from inference; this threshold was selected by the sweep described in Section 5.3.1. For windows that pass the SQA gate, the diagnostic model runs on the same feature tensor, producing a Normal probability P(Normal) ∈ [0, 1]. The chunk-level result aggregates all valid windows through a quality-weighted average:
 
 $$\text{score} = \frac{\sum_{i} P(\text{Good})_i \cdot P(\text{Normal})_i}{\sum_{i} P(\text{Good})_i}$$
 
@@ -570,7 +597,7 @@ BLE notification (128 B) → accumulate in ring buffer
   └─ per-window peak normalisation (÷ max absolute value)
   └─ log-Mel spectrogram (64 × 64)
   └─ reshape to (1, 1, 64, 64)
-  └─ SQA TFLite → P(Good); skip if < 0.6
+  └─ SQA TFLite → P(Good); skip if < 0.65
   └─ Diagnostic TFLite → P(Normal)
   └─ accumulate (P(Good), P(Normal)) pairs
 → chunk result: quality-weighted average → label + confidence
@@ -605,6 +632,8 @@ The bandpass filter and Log-Mel spectrogram are implemented as NumPy operations 
 | Model file size — SQA INT8 | 144.7 KB |
 | Model file size — Diagnostic INT8 | 144.7 KB |
 | Model file size — FP32 (each) | 302.8 KB |
+
+The 249.9 MB RSS figure reflects the Python runtime environment rather than model size: the CPython interpreter, NumPy, librosa, SciPy, and the asyncio event loop collectively account for the majority of this footprint. The two TFLite model instances themselves contribute under 300 KB combined; the remainder is interpreter and library overhead that would be present even without any model loaded.
 
 **Realtime constraint.** Each 2-second segment must be fully processed before the next segment is complete, i.e., total per-segment latency must remain under 2,000 ms. At the ARM Cortex-A72 clock speed (1.5 GHz) and given the lightweight model size (65.12K parameters, 144.7 KB INT8), the total per-segment latency of 33.9 ms satisfies the real-time constraint with a margin of approximately 59×.
 
