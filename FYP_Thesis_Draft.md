@@ -76,12 +76,12 @@ LIST OF SYMBOLS AND ABBREVIATIONS … vi
 **CHAPTER 5 TRAINING AND EXPERIMENTS** … X
 - 5.1 Training Configuration … X
 - 5.2 Diagnostic Model Results … X
-  - 5.2.1 Training Progression … X
+  - 5.2.1 Ablation Study … X
   - 5.2.2 Hyperparameter Search … X
-  - 5.2.3 Decision Threshold Analysis … X
+  - 5.2.3 Training Progression … X
+  - 5.2.4 Decision Threshold Analysis … X
 - 5.3 SQA Model Results … X
-- 5.4 Ablation Study … X
-- 5.5 Quantization Impact … X
+- 5.4 Quantization Impact … X
 
 **CHAPTER 6 EDGE DEPLOYMENT** … X
 - 6.1 System Architecture Overview … X
@@ -101,8 +101,6 @@ REFERENCES … X
 
 ## LIST OF FIGURES
 
-> *Page numbers to be filled after final typesetting.*
-
 | Figure    | Caption                                                                                                          | Page |
 | --------- | ---------------------------------------------------------------------------------------------------------------- | ---- |
 | Fig. 3.1  | Signal preprocessing pipeline: (a) raw waveform; (b) bandpass filtered; (c) 2-second segment; (d) Log-Mel spectrogram. | X    |
@@ -114,16 +112,15 @@ REFERENCES … X
 | Fig. 4.5  | Coordinate Attention structure.                                                                                  | X    |
 | Fig. 4.6  | CoordAtt integration into DSC blocks.                                                                            | X    |
 | Fig. 5.1  | Confusion matrix structure and derived metrics (Se, Sp, M-Score).                                                | X    |
-| Fig. 5.2  | Training curve: diagnostic model (Run 6).                                                                        | X    |
-| Fig. 5.3  | Confusion matrix: diagnostic model (Run 6), INT8 vs FP32.                                                        | X    |
-| Fig. 5.4  | Validation M-Score distribution across 40 hyperparameter sweep trials.                                           | X    |
-| Fig. 5.5  | Top-performing sweep configurations.                                                                             | X    |
+| Fig. 5.2  | Ablation study — M-Score, Se, and Sp across four model configurations.                                           | X    |
+| Fig. 5.3  | Top-performing sweep configurations (validation M-Score).                                                        | X    |
+| Fig. 5.4  | Training curve: diagnostic model (Run 6).                                                                        | X    |
+| Fig. 5.5  | Confusion matrix: diagnostic model (Run 6), INT8 vs FP32.                                                        | X    |
 | Fig. 5.6  | Classification threshold analysis: diagnostic model (Run 6).                                                     | X    |
 | Fig. 5.7  | SQA model performance across three training runs.                                                                | X    |
 | Fig. 5.8  | Confusion matrix: SQA model (Run 3), INT8 vs FP32.                                                               | X    |
 | Fig. 5.9  | Classification threshold analysis: SQA model (Run 3).                                                            | X    |
-| Fig. 5.10 | Ablation study — Se, Sp, M-Score across four model configurations.                                               | X    |
-| Fig. 5.11 | FP32 vs INT8 model size: diagnostic and SQA models.                                                              | X    |
+| Fig. 5.10 | FP32 vs INT8 model size: diagnostic and SQA models.                                                              | X    |
 | Fig. 6.1  | System architecture overview.                                                                                    | X    |
 | Fig. 6.2  | Per-stage inference latency on Pi 4B, FP32 vs INT8.                                                              | X    |
 
@@ -131,19 +128,17 @@ REFERENCES … X
 
 ## LIST OF TABLES
 
-> *Page numbers to be filled after final typesetting.*
-
 | Table     | Caption                                                   | Page |
 | --------- | --------------------------------------------------------- | ---- |
 | Table 2.1 | Top entries from the PhysioNet/CinC 2016 Challenge.       | X    |
 | Table 3.1 | Dataset summary.                                          | X    |
 | Table 4.1 | LightweightCNN layer specifications.                      | X    |
-| Table 5.1 | Training run comparison.                                  | X    |
+| Table 5.1 | Ablation study results.                                   | X    |
 | Table 5.2 | Top 3 sweep trials (validation M-Score).                  | X    |
-| Table 5.3 | SQA model — validation M-Score by epoch (Run 1 baseline). | X    |
-| Table 5.4 | SQA model — three-run progression.                        | X    |
-| Table 5.5 | Final SQA model (Run 3) vs diagnostic model (Run 6).      | X    |
-| Table 5.6 | Ablation study results.                                   | X    |
+| Table 5.3 | Training run comparison.                                  | X    |
+| Table 5.4 | SQA model — validation M-Score by epoch (Run 1 baseline). | X    |
+| Table 5.5 | SQA model — three-run progression.                        | X    |
+| Table 5.6 | Final SQA model (Run 3) vs diagnostic model (Run 6).      | X    |
 | Table 5.7 | FP32 vs INT8 quantization comparison.                     | X    |
 | Table 6.1 | Per-stage inference latency on Pi 4B.                     | X    |
 | Table 6.2 | Resource utilisation during inference.                    | X    |
@@ -382,6 +377,8 @@ The total trainable parameter count is approximately 65.12K. The quantized INT8 
 ![Fig 4.3](photo-from-PC/fig4_1_architecture_flat.png)
 **Figure 4.3: LightweightCNN architecture.**
 
+The depth of three DSC stages is determined jointly by the input resolution and the edge deployment constraint. Each stage halves the spatial dimension via 2×2 max-pooling, producing the progression 64×64 → 32×32 → 16×16 → 8×8 before global average pooling. A shallower network of two stages would leave the feature map at 16×16, collapsing spatial detail too early for the subsequent attention module to localise meaningful time-frequency patterns. A fourth stage would reduce the map to 4×4 and require doubling the final channel count to 512, adding approximately 525K parameters—an unjustifiable cost for a binary classification task on a resource-constrained device. The channel schedule (32→64→128→256) follows the standard practice of doubling capacity as spatial resolution halves, preserving information through progressive compression [18]. Global average pooling replaces a large fully connected bottleneck: reducing each channel to a scalar before the linear classifier eliminates the dense weight matrix that would otherwise dominate the parameter count and introduce strong overfitting pressure on the limited training set. A single dropout layer (rate 0.3) before the final linear layer provides additional regularisation. The contribution of each component is empirically validated in Section 5.2.1.
+
 ### 4.3 Coordinate Attention Module
 
 Each DSC block in layers 2–4 integrates a Coordinate Attention (CoordAtt) module [28] inserted after the pointwise convolution.
@@ -405,10 +402,11 @@ CoordAtt retains positional information by decomposing spatial pooling along the
 ![[Coordinate-Attention.png]]
 **Figure 4.5: Coordinate Attention structure. Reproduced from Cao et al. [29].**
 
-![[How to plug the proposed CA block in the inverted residual block abd the sunglass block.png]]
+![[Paper_Photo/How to plug the proposed CA block in the inverted residual block abd the sunglass block.png]]
+
 **Figure 4.6: CoordAtt integration into DSC blocks. Reproduced from Hou et al. [28].**
 
-The additional parameter cost per CoordAtt block is small: approximately 1.6K, 3.1K, and 12.3K at layers 2, 3, and 4 respectively, modest relative to the DSC blocks they augment.
+The additional parameter cost per CoordAtt block is small: approximately 1.6K, 3.1K, and 12.3K at layers 2, 3, and 4 respectively, modest relative to the DSC blocks they augment. The contribution of each component is empirically validated in Section 5.2.1.
 
 ### 4.4 Signal Quality Assessment Model
 
@@ -447,34 +445,29 @@ where Sensitivity $Se = \frac{TP}{TP + FN}$ measures the fraction of abnormal re
 
 ### 5.2 Diagnostic Model Results
 
-#### 5.2.1 Training Progression
+#### 5.2.1 Ablation Study
 
-Seven training runs were conducted to isolate the effect of individual design decisions. All runs use the LightweightCNN + CoordAtt architecture (Group C in the ablation study) unless otherwise noted. Table 5.1 summarises the key configurations and test results.
+To quantify the contribution of each architectural component, four model variants were trained under identical conditions: the same dataset split, preprocessing parameters ($n_\text{mels}$ = 32, hop length = 96, $n_\text{fft}$ = 256, overlap = 0.5), training hyperparameters (batch = 16, lr = 1×10⁻³, weight decay = 1×10⁻⁴, early stopping patience = 10), and class balancing strategy. The variants form a cumulative chain, each adding one modification to the previous.
 
-**Table 5.1: Training run comparison.**
+**Table 5.1: Ablation study results.**
 
-| Run | Batch | n\_mels | hop | Label Smooth | Early Stop | Test M-Score | Test Se | Test Sp |
-|-----|-------|---------|-----|:---:|:---:|:---:|:---:|:---:|
-| 1 | 16 | 32 | 96 | ✗ | ✗ | 0.8852 | 0.9569 | 0.8135 |
-| 2 | 16 | 32 | 96 | ✓ | ✓ | 0.8816 | 0.9181 | 0.8452 |
-| 3 | 16 | 32 | 96 | ✓ | ✓ | 0.8828 | 0.9105 | 0.8551 |
-| 4 | 256 | 32 | 96 | ✗ | ✓ | 0.8835 | 0.9544 | 0.8125 |
-| 5 | 256 | 64 | 128 | ✗ | ✓ | 0.8784 | 0.9409 | 0.8159 |
-| 6 (sweep params) | 16 | 64 | 128 | ✗ | ✓ | **0.8903** | **0.9485** | **0.8322** |
-| 7 | 16 | 32 | 96 | ✗ | ✓ | 0.8869 | 0.9383 | 0.8355 |
+| Config | Params | Test M-Score | Test Se | Test Sp | Test Acc | Best Epoch |
+|--------|-------:|:------------:|:-------:|:-------:|:--------:|:----------:|
+| A: Baseline (16→32→64→128, no attention) | 12.87K | 0.8851 | 0.9654 | 0.8049 | 0.8352 | 1 |
+| B: + Wider channels (32→64→128→256) | 47.23K | 0.8896 | 0.9595 | 0.8198 | 0.8462 | 1 |
+| C: + CoordAtt + Dropout(0.3) | 65.12K | 0.8869 | 0.9383 | 0.8355 | 0.8549 | 5 |
+| D: + Residual connections | 108.10K | **0.8912** | **0.9797** | 0.8027 | 0.8361 | 2 |
 
-> *Run 3 uses overlap = 0.75 (vs 0.5 in others), held constant as a separate variable.*
+**A → B: Wider channels.** Doubling the channel width throughout (+0.005 M-Score) improves both Se and Sp marginally. The best epoch remains 1, indicating that the model still overfits rapidly and that increased capacity alone does not improve training dynamics.
 
-Several consistent patterns emerge across runs. First, label smoothing (Run 2 vs Run 4) shifts the Se/Sp balance toward higher Sp at the cost of Se—the Se/Sp gap narrows from 0.143 to 0.073—but produces no meaningful change in M-Score (0.8816 vs 0.8835). Since the home screening use case penalises missed abnormal cases more heavily than false alarms, label smoothing was excluded from subsequent runs. Second, batch size 16 consistently outperforms batch size 256 when holding all other parameters fixed (Run 6 vs Run 5: +0.012 M-Score; Run 7 vs Run 4: +0.003), likely because smaller batches provide noisier but more frequent gradient updates that regularise training. Third, overlap = 0.75 (Run 3) produces no meaningful improvement over overlap = 0.5 at the same configuration.
+**B → C: CoordAtt + Dropout.** Adding Coordinate Attention and Dropout (rate 0.3) produces the most notable change in training behaviour: the best validation epoch shifts from 1 to 5, indicating substantially better regularisation. M-Score decreases slightly (−0.003) relative to B, but Sp increases by +0.016 and the Se/Sp gap narrows from 0.134 to 0.103. The contribution of CoordAtt is therefore more accurately characterised as improved training stability and better Se/Sp balance than raw M-Score gain.
 
-**Run 6** achieves the highest test M-Score (0.8903) and is selected as the final model. Its preprocessing parameters (n\_mels = 64, hop = 128) were identified by a 40-trial Bayesian hyperparameter search (Section 5.2.2), and the batch size was set to 16 based on the empirical comparison above.
+**C → D: Residual connections.** Residual connections yield the highest test M-Score (0.8912, +0.004 over C), driven by a large Se increase (+0.041). However, Sp drops to 0.8027—lower than any other variant—and the best epoch regresses to 2, suggesting that residual connections accelerate convergence at the cost of reinforcing the model's tendency to over-predict Abnormal. The Se/Sp gap widens to 0.177.
 
-![Fig 5.2](photo-from-PC/fig5_1_training_curve.png)
-**Figure 5.2: Training curve: diagnostic model (Run 6).**
+![Fig 5.2](photo-from-PC/fig5_2_ablation.png)
+**Figure 5.2: Ablation study — M-Score, Se, and Sp across four model configurations.**
 
-![Fig 5.3a](photo-from-PC/confusion_matrix_diag.png)
-![Fig 5.3b](photo-from-PC/confusion_matrix_diag_trainpc.png)
-**Figure 5.3: Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
+**Architecture selection.** Config C is selected as the final architecture. While D achieves the highest M-Score, its Se/Sp imbalance (0.177 gap) is worse than A (0.161) and substantially worse than C (0.103). In a home screening device where missed abnormal cases carry greater clinical risk than false alarms, Se is more important than Sp—but the magnitude of Sp degradation in D (0.8027, a 32.8% false alarm rate on normal recordings) is considered unacceptable for a practical device. Config C provides the best balance across all three criteria: Se/Sp balance, training stability, and parameter efficiency.
 
 #### 5.2.2 Hyperparameter Search
 
@@ -490,13 +483,39 @@ A Bayesian sweep over 40 trials was conducted using Weights & Biases, optimising
 
 The configuration $n_\text{mels}$ = 64, $n_\text{fft}$ = 256, overlap = 0.75, lr = 1×10⁻³ appears consistently across the top trials, indicating a stable optimal region. The selected parameters for the final model are $n_\text{mels}$ = 64, hop length = 128, $n_\text{fft}$ = 256, weight decay = 1×10⁻³.
 
-![Fig 5.4](photo-from-PC/fig5_sweep_boxplot.png)
-**Figure 5.4: Distribution of validation M-Score across all 40 hyperparameter sweep trials.**
+![Fig 5.3](photo-from-PC/fig5_sweep_boxplot_best.png)
+**Figure 5.3: Validation M-Score for the top-performing sweep configurations.**
 
-![Fig 5.5](photo-from-PC/fig5_sweep_boxplot_best.png)
-**Figure 5.5: Validation M-Score for the top-performing sweep configurations.**
+#### 5.2.3 Training Progression
 
-#### 5.2.3 Decision Threshold Analysis
+Seven training runs were conducted to assess the impact of training decisions and to validate the preprocessing parameters identified by the hyperparameter sweep (Section 5.2.2). All runs use the LightweightCNN + CoordAtt architecture (Config C from Section 5.2.1). Table 5.3 summarises the key configurations and test results.
+
+**Table 5.3: Training run comparison.**
+
+| Run | Batch | n\_mels | hop | Label Smooth | Early Stop | Test M-Score | Test Se | Test Sp |
+|-----|-------|---------|-----|:---:|:---:|:---:|:---:|:---:|
+| 1 | 16 | 32 | 96 | ✗ | ✗ | 0.8852 | 0.9569 | 0.8135 |
+| 2 | 16 | 32 | 96 | ✓ | ✓ | 0.8816 | 0.9181 | 0.8452 |
+| 3 | 16 | 32 | 96 | ✓ | ✓ | 0.8828 | 0.9105 | 0.8551 |
+| 4 | 256 | 32 | 96 | ✗ | ✓ | 0.8835 | 0.9544 | 0.8125 |
+| 5 | 256 | 64 | 128 | ✗ | ✓ | 0.8784 | 0.9409 | 0.8159 |
+| 6 (sweep params) | 16 | 64 | 128 | ✗ | ✓ | **0.8903** | **0.9485** | **0.8322** |
+| 7 | 16 | 32 | 96 | ✗ | ✓ | 0.8869 | 0.9383 | 0.8355 |
+
+> *Run 3 uses overlap = 0.75 (vs 0.5 in others), held constant as a separate variable.*
+
+Several consistent patterns emerge across runs. First, label smoothing (Run 2 vs Run 4) shifts the Se/Sp balance toward higher Sp at the cost of Se—the Se/Sp gap narrows from 0.143 to 0.073—but produces no meaningful change in M-Score (0.8816 vs 0.8835). Since the home screening use case penalises missed abnormal cases more heavily than false alarms, label smoothing was excluded from subsequent runs. Second, batch size 16 consistently outperforms batch size 256 when holding all other parameters fixed (Run 6 vs Run 5: +0.012 M-Score; Run 7 vs Run 4: +0.003), likely because smaller batches provide noisier but more frequent gradient updates that regularise training. Third, overlap = 0.75 (Run 3) produces no meaningful improvement over overlap = 0.5 at the same configuration.
+
+**Run 6** achieves the highest test M-Score (0.8903) and is selected as the final model. It combines the sweep-identified preprocessing parameters (Section 5.2.2) with the empirically optimal batch size of 16.
+
+![Fig 5.4](photo-from-PC/fig5_1_training_curve.png)
+**Figure 5.4: Training curve: diagnostic model (Run 6).**
+
+![Fig 5.5a](photo-from-PC/confusion_matrix_diag.png)
+![Fig 5.5b](photo-from-PC/confusion_matrix_diag_trainpc.png)
+**Figure 5.5: Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
+
+#### 5.2.4 Decision Threshold Analysis
 
 The default classification threshold of 0.5 was evaluated against a sweep from 0.30 to 0.80 on the final model (Run 6). Results are shown in Fig. 5.6.
 
@@ -509,7 +528,7 @@ The sweep confirms that 0.50 is both the optimal and the default threshold: it a
 
 The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K parameters) and training hyperparameters as the final diagnostic model (batch = 16, early stopping patience = 10). The dataset is `metadata_quality_reversed.csv` (3,240 recordings, Bad:Good = 364:2,876), split 80/10/10 by recording, yielding 54,842 training, 6,536 validation, and 6,726 test segments. Preprocessing uses the final configuration (n\_mels = 64, hop = 128). Three training runs were conducted to progressively address the Se deficit caused by the more severe 8:1 class imbalance.
 
-**Table 5.3: SQA model — validation M-Score across training epochs (Run 1 baseline).**
+**Table 5.4: SQA model — validation M-Score across training epochs (Run 1 baseline).**
 
 | Epoch | Val Se (Bad) | Val Sp (Good) | Val M-Score |
 |:-----:|:------------:|:-------------:|:-----------:|
@@ -525,7 +544,7 @@ The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K par
 
 **Run 3** increases dropout from 0.3 to 0.5, retaining all other Run 2 changes. The heavier regularisation reduces overfitting on the small Bad-class population: test Se reaches 0.8274 (+0.062 over Run 2), and the train/val loss gap narrows. The best validation checkpoint now appears at Epoch 2—earlier convergence than Run 2—after which M-Score declines monotonically to early-stop at Epoch 12. Run 3 is selected as the final SQA model.
 
-**Table 5.4: SQA model — three-run progression.**
+**Table 5.5: SQA model — three-run progression.**
 
 | Metric | Run 1 | Run 2 | **Run 3 (final)** | Run 1→3 change |
 |--------|:-----:|:-----:|:-----------------:|:--------------:|
@@ -537,7 +556,7 @@ The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K par
 | Val→Test Se gap | −0.011 | −0.047 | −0.048 | stable ~0.05 |
 | Early stop epoch | 22 | 22 | 12 | faster |
 
-**Table 5.5: Final SQA model (Run 3) vs diagnostic model.**
+**Table 5.6: Final SQA model (Run 3) vs diagnostic model.**
 
 | Metric | Diagnostic Model (Run 6) | SQA Model (Run 3) |
 |--------|:------------------------:|:-----------------:|
@@ -565,31 +584,7 @@ The M-Score curve is notably flat throughout the sweep range (0.8064–0.8143), 
 ![Fig 5.9](photo-from-PC/fig5_3_threshold_sqa.png)
 **Figure 5.9: Classification threshold analysis: SQA model (Run 3).**
 
-### 5.4 Ablation Study
-
-To quantify the contribution of each architectural component, four model variants were trained under identical conditions: the same dataset split, preprocessing parameters ($n_\text{mels}$ = 32, hop length = 96, $n_\text{fft}$ = 256, overlap = 0.5), training hyperparameters (batch = 16, lr = 1×10⁻³, weight decay = 1×10⁻⁴, early stopping patience = 10), and class balancing strategy. The variants form a cumulative chain, each adding one modification to the previous.
-
-**Table 5.6: Ablation study results.**
-
-| Config | Params | Test M-Score | Test Se | Test Sp | Test Acc | Best Epoch |
-|--------|-------:|:------------:|:-------:|:-------:|:--------:|:----------:|
-| A: Baseline (16→32→64→128, no attention) | 12.87K | 0.8851 | 0.9654 | 0.8049 | 0.8352 | 1 |
-| B: + Wider channels (32→64→128→256) | 47.23K | 0.8896 | 0.9595 | 0.8198 | 0.8462 | 1 |
-| C: + CoordAtt + Dropout(0.3) | 65.12K | 0.8869 | 0.9383 | 0.8355 | 0.8549 | 5 |
-| D: + Residual connections | 108.10K | **0.8912** | **0.9797** | 0.8027 | 0.8361 | 2 |
-
-**A → B: Wider channels.** Doubling the channel width throughout (+0.005 M-Score) improves both Se and Sp marginally. The best epoch remains 1, indicating that the model still overfits rapidly and that increased capacity alone does not improve training dynamics.
-
-**B → C: CoordAtt + Dropout.** Adding Coordinate Attention and Dropout (rate 0.3) produces the most notable change in training behaviour: the best validation epoch shifts from 1 to 5, indicating substantially better regularisation. M-Score decreases slightly (−0.003) relative to B, but Sp increases by +0.016 and the Se/Sp gap narrows from 0.134 to 0.103. The contribution of CoordAtt is therefore more accurately characterised as improved training stability and better Se/Sp balance than raw M-Score gain.
-
-**C → D: Residual connections.** Residual connections yield the highest test M-Score (0.8912, +0.004 over C), driven by a large Se increase (+0.041). However, Sp drops to 0.8027—lower than any other variant—and the best epoch regresses to 2, suggesting that residual connections accelerate convergence at the cost of reinforcing the model's tendency to over-predict Abnormal. The Se/Sp gap widens to 0.177.
-
-![Fig 5.10](photo-from-PC/fig5_2_ablation.png)
-**Figure 5.10: Ablation study — M-Score, Se, and Sp across four model configurations.**
-
-**Architecture selection.** Config C is selected as the final architecture. While D achieves the highest M-Score, its Se/Sp imbalance (0.177 gap) is worse than A (0.161) and substantially worse than C (0.103). In a home screening device where missed abnormal cases carry greater clinical risk than false alarms, Se is more important than Sp—but the magnitude of Sp degradation in D (0.8027, a 32.8% false alarm rate on normal recordings) is considered unacceptable for a practical device. Config C provides the best balance across all three criteria: Se/Sp balance, training stability, and parameter efficiency.
-
-### 5.5 Quantization Impact
+### 5.4 Quantization Impact
 
 Post-training quantization is applied to both models via dynamic range quantization (`tf.lite.Optimize.DEFAULT`), which statically converts all weight tensors from FP32 to INT8 at export time while leaving activations in floating point. Table 5.7 summarises the impact on model size and diagnostic accuracy.
 
@@ -607,8 +602,8 @@ All accuracy metrics change by at most 0.1 percentage point, within the expected
 
 Latency impact is equally marginal and is detailed in Table 6.1 (Section 6.3). Because dynamic range quantization leaves activations at float32 at runtime, the ARM Cortex-A72 cannot execute true INT8 GEMM operations; the benefit is reduced memory bandwidth for weight loading only. Full integer quantization—where both weights and activations are fixed at INT8—would be needed to realise arithmetic-level speedup.
 
-![Fig 5.11](photo-from-PC/fig6_3_model_size.png)
-**Figure 5.11: FP32 vs INT8 model size: diagnostic and SQA models.**
+![Fig 5.10](photo-from-PC/fig6_3_model_size.png)
+**Figure 5.10: FP32 vs INT8 model size: diagnostic and SQA models.**
 
 ---
 
@@ -678,11 +673,11 @@ Preprocessing latency is identical across both configurations; the marginal TFLi
 | Peak CPU utilisation | 1.3% |
 | Memory usage (RSS) | 249.9 MB |
 
-The 249.9 MB RSS reflects Python runtime overhead; the two TFLite model instances together contribute under 300 KB. Model file sizes for the FP32 and INT8 variants of both models are shown in Fig. 5.11.
+The 249.9 MB RSS reflects Python runtime overhead; the two TFLite model instances together contribute under 300 KB. Model file sizes for the FP32 and INT8 variants of both models are shown in Fig. 5.10.
 
 **Realtime constraint.** The 33.9 ms total per-segment latency satisfies the 2,000 ms real-time budget with a margin of approximately 59×.
 
-The accuracy impact of INT8 quantization on the diagnostic model is reported in Table 5.7 (Section 5.5); Sensitivity is entirely unaffected, and degradation does not exceed 0.1 percentage point across all metrics.
+The accuracy impact of INT8 quantization on the diagnostic model is reported in Table 5.7 (Section 5.4); Sensitivity is entirely unaffected, and degradation does not exceed 0.1 percentage point across all metrics.
 
 ### 6.4 User Interface
 
@@ -742,15 +737,15 @@ Taken together, these results demonstrate that accurate, quality-aware cardiac s
 
 **Output granularity.** The system produces a binary Normal/Abnormal label with no disease subtype information.
 
+**Single-modality input and single-platform characterisation.** The system acquires only phonocardiographic signals. Similarly, latency and resource measurements are confined to the Raspberry Pi 4B — how the accuracy–latency trade-off changes on more constrained hardware tiers remains unexplored.
+
 ---
 
 ### 7.3 Future Work
 
-**Full integer quantization.** Statically quantizing activations alongside weights would unlock true INT8 GEMM on the Cortex-A72, reducing latency beyond what dynamic range quantization achieves.
+**Cross-device deployment benchmark.** The inference pipeline achieves a 59× real-time margin on the ARM Cortex-A72 at 1.3% peak CPU utilisation, indicating that the Raspberry Pi 4B is substantially over-provisioned for the current model. A systematic evaluation across a hardware hierarchy — from microcontroller-class targets such as the ESP32-S3 to mid-range SBCs and NPU-equipped embedded platforms — would characterise how the accuracy–latency trade-off changes as available compute shrinks, and would yield empirical guidelines for matching model parameter budgets, architecture families (convolutional, Transformer, or hybrid), and quantization depth to specific hardware tiers. Such a benchmark would generalise the design methodology of this work and could serve as a practical reference for future edge AI deployments in resource-constrained medical settings.
 
-**Multi-class output.** Distinguishing specific valve pathologies would require annotated datasets with subtype labels, but would substantially increase clinical utility.
-
-**SQA improvement.** Training the SQA model with contrastive or self-supervised objectives could improve bad-quality detection without relying on the small set of manually labelled bad examples.
+**Multi-sensor multimodal large model for clinical diagnosis.** Since the diagnostic pipeline already represents PCG signals as Log-Mel spectrograms — a 2D visual format — its input modality is naturally compatible with vision-language models (VLMs). Extending acquisition to additional physiological channels, such as ECG, lung sound, and EEG, would yield a set of synchronised spectrograms that can be treated as multi-image visual tokens, jointly processed alongside structured clinical metadata (patient demographics, reported symptoms) as language tokens. Training a domain-specific multimodal large language model (MLLM) on such inputs could enable cross-modal reasoning that no single-sensor model can replicate — for instance, correlating arrhythmic ECG patterns with concurrent abnormal heart sounds to reduce ambiguous classifications. Given the parameter scale of such models, inference would be hosted on an on-premise GPU server deployed within the clinical environment (e.g., a hospital ICU), preserving data sovereignty without cloud dependency. This represents a natural long-term trajectory from the lightweight single-sensor edge system demonstrated in this work.
 
 ---
 
@@ -764,7 +759,7 @@ Taken together, these results demonstrate that accurate, quality-aware cardiac s
 
 [4] Han J. et al., "ENACT-Heart: ENsemble-based Assessment Using CNN and Transformer on Heart Sounds", arXiv preprint arXiv:2502.16914 (2025).
 
-[5] Zhang M. et al., "A Low-Cost AI-Empowered Stethoscope and a Lightweight Model for Detecting Cardiac and Respiratory Diseases", *Sensors* 23, 2591 (2023).
+[5] Zhang M. et al., "A Low-Cost AI-Empowered Stethoscope and a Lightweight Model for Detecting Cardiac and Respiratory Diseases", *Sensors* 23, 2591 (2023).ok
 
 [6] Yaseen, Son G. Y. and Kwon S., "Classification of Heart Sound Signal Using Multiple Features", *Applied Sciences* 8, 2344 (2018).
 
