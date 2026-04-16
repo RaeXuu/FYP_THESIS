@@ -115,12 +115,15 @@ REFERENCES … X
 | Fig. 5.2  | Ablation study — M-Score, Se, and Sp across four model configurations.                                           | X    |
 | Fig. 5.3  | Top-performing sweep configurations (validation M-Score).                                                        | X    |
 | Fig. 5.4  | Training curve: diagnostic model (Run 6).                                                                        | X    |
-| Fig. 5.5  | Confusion matrix: diagnostic model (Run 6), INT8 vs FP32.                                                        | X    |
+| Fig. 5.5  | Confusion matrix: diagnostic model (Run 6), FP32.                                                                | X    |
 | Fig. 5.6  | Classification threshold analysis: diagnostic model (Run 6).                                                     | X    |
 | Fig. 5.7  | SQA model performance across three training runs.                                                                | X    |
-| Fig. 5.8  | Confusion matrix: SQA model (Run 3), INT8 vs FP32.                                                               | X    |
-| Fig. 5.9  | Classification threshold analysis: SQA model (Run 3).                                                            | X    |
-| Fig. 5.10 | FP32 vs INT8 model size: diagnostic and SQA models.                                                              | X    |
+| Fig. 5.8  | Training curve: SQA model (Run 3).                                                                               | X    |
+| Fig. 5.9  | Confusion matrix: SQA model (Run 3), FP32.                                                                       | X    |
+| Fig. 5.10 | Classification threshold analysis: SQA model (Run 3).                                                            | X    |
+| Fig. 5.11 | Diagnostic model confusion matrices — FP32 vs INT8.                                                              | X    |
+| Fig. 5.12 | SQA model confusion matrices — FP32 vs INT8.                                                                     | X    |
+| Fig. 5.13 | FP32 vs INT8 model size: diagnostic and SQA models.                                                              | X    |
 | Fig. 6.1  | System architecture overview.                                                                                    | X    |
 | Fig. 6.2  | Per-stage inference latency on Pi 4B, FP32 vs INT8.                                                              | X    |
 
@@ -136,12 +139,8 @@ REFERENCES … X
 | Table 5.1 | Ablation study results.                                   | X    |
 | Table 5.2 | Top 3 sweep trials (validation M-Score).                  | X    |
 | Table 5.3 | Training run comparison.                                  | X    |
-| Table 5.4 | SQA model — validation M-Score by epoch (Run 1 baseline). | X    |
-| Table 5.5 | SQA model — three-run progression.                        | X    |
-| Table 5.6 | Final SQA model (Run 3) vs diagnostic model (Run 6).      | X    |
-| Table 5.7 | FP32 vs INT8 quantization comparison.                     | X    |
-| Table 6.1 | Per-stage inference latency on Pi 4B.                     | X    |
-| Table 6.2 | Resource utilisation during inference.                    | X    |
+| Table 5.4 | Final SQA model (Run 3) vs diagnostic model (Run 6).      | X    |
+| Table 6.1 | Resource utilisation during inference.                    | X    |
 
 ---
 
@@ -420,13 +419,13 @@ Both models are converted to TFLite format using the `ai_edge_torch` library, wh
 
 Dynamic range quantization statically converts all weight tensors from FP32 to INT8 at export time, reducing the weight storage footprint by approximately 4×. Activations are not statically quantized; instead, their ranges are computed dynamically per inference call. This approach requires no calibration dataset, making it straightforward to apply to any trained checkpoint. The trade-off relative to full integer quantization—where both weights and activations are fixed at INT8—is that activation quantization overhead occurs at runtime rather than being amortized.
 
-The resulting quantized models each occupy 144.7 KB on disk. On the ARM Cortex-A72 of the Raspberry Pi 4B, weight-compressed INT8 models reduce memory bandwidth pressure during inference. Quantitative accuracy retention and latency comparisons between the FP32 and quantized variants are reported in Chapter 5.
+Quantitative results — model size reduction, accuracy impact, and latency — are reported in Section 5.4.
 
 ---
 
 ## Chapter 5: Training and Experiments
 
-This chapter reports all training experiments conducted during model development. Section 5.1 describes the shared training configuration and evaluation metrics used across all experiments. Sections 5.2 and 5.3 present the diagnostic and SQA model results respectively, each covering training progression, hyperparameter search, and decision threshold analysis. Section 5.4 reports the ablation study, which isolates the contribution of each architectural component. Section 5.5 evaluates the impact of post-training quantization on model size and accuracy.
+This chapter reports all training experiments conducted during model development. Section 5.1 describes the shared training configuration and evaluation metrics. Section 5.2 presents diagnostic model results, covering the ablation study, hyperparameter search, training progression, and decision threshold analysis. Section 5.3 presents SQA model results. Section 5.4 evaluates the impact of post-training quantization on model size and accuracy.
 
 ### 5.1 Training Configuration
 
@@ -451,12 +450,12 @@ To quantify the contribution of each architectural component, four model variant
 
 **Table 5.1: Ablation study results.**
 
-| Config | Params | Test M-Score | Test Se | Test Sp | Test Acc | Best Epoch |
-|--------|-------:|:------------:|:-------:|:-------:|:--------:|:----------:|
-| A: Baseline (16→32→64→128, no attention) | 12.87K | 0.8851 | 0.9654 | 0.8049 | 0.8352 | 1 |
-| B: + Wider channels (32→64→128→256) | 47.23K | 0.8896 | 0.9595 | 0.8198 | 0.8462 | 1 |
-| C: + CoordAtt + Dropout(0.3) | 65.12K | 0.8869 | 0.9383 | 0.8355 | 0.8549 | 5 |
-| D: + Residual connections | 108.10K | **0.8912** | **0.9797** | 0.8027 | 0.8361 | 2 |
+| Config                                   |  Params |
+| ---------------------------------------- | ------: |
+| A: Baseline (16→32→64→128, no attention) |  12.87K |
+| B: + Wider channels (32→64→128→256)      |  47.23K |
+| C: + CoordAtt + Dropout(0.3)             |  65.12K |
+| D: + Residual connections                | 108.10K |
 
 **A → B: Wider channels.** Doubling the channel width throughout (+0.005 M-Score) improves both Se and Sp marginally. The best epoch remains 1, indicating that the model still overfits rapidly and that increased capacity alone does not improve training dynamics.
 
@@ -511,9 +510,8 @@ Several consistent patterns emerge across runs. First, label smoothing (Run 2 vs
 ![Fig 5.4](photo-from-PC/fig5_1_training_curve.png)
 **Figure 5.4: Training curve: diagnostic model (Run 6).**
 
-![Fig 5.5a](photo-from-PC/confusion_matrix_diag.png)
-![Fig 5.5b](photo-from-PC/confusion_matrix_diag_trainpc.png)
-**Figure 5.5: Confusion matrix for the final diagnostic model (Run 6) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
+![Fig 5.5](photo-from-PC/confusion_matrix_diag_trainpc.png)
+**Figure 5.5: Confusion matrix for the final diagnostic model (Run 6), FP32 evaluation. FP32 vs INT8 comparison is shown in Section 5.4.**
 
 #### 5.2.4 Decision Threshold Analysis
 
@@ -528,35 +526,14 @@ The sweep confirms that 0.50 is both the optimal and the default threshold: it a
 
 The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K parameters) and training hyperparameters as the final diagnostic model (batch = 16, early stopping patience = 10). The dataset is `metadata_quality_reversed.csv` (3,240 recordings, Bad:Good = 364:2,876), split 80/10/10 by recording, yielding 54,842 training, 6,536 validation, and 6,726 test segments. Preprocessing uses the final configuration (n\_mels = 64, hop = 128). Three training runs were conducted to progressively address the Se deficit caused by the more severe 8:1 class imbalance.
 
-**Table 5.4: SQA model — validation M-Score across training epochs (Run 1 baseline).**
-
-| Epoch | Val Se (Bad) | Val Sp (Good) | Val M-Score |
-|:-----:|:------------:|:-------------:|:-----------:|
-| 1 | 0.7409 | 0.8592 | 0.8000 |
-| 3 | 0.7263 | 0.8826 | 0.8044 |
-| 9 | 0.7172 | 0.9036 | 0.8104 |
-| **12** | **0.7281** | **0.9050** | **0.8165** ← best |
-| 22 | 0.6825 | 0.9377 | 0.8101 (early stop) |
-
 **Run 1** (lr = 1×10⁻³, CrossEntropyLoss, dropout = 0.3) establishes the baseline. Validation M-Score oscillates noticeably across epochs (0.78–0.82), a sign of unstable training under the 8:1 imbalance. Test Se = 0.7173: 28.3% of bad-quality segments pass through to the diagnostic model undetected.
 
 **Run 2** adds an explicit class weight of [1, 8] to the loss function and reduces the learning rate to 5×10⁻⁴ (scheduler patience raised from 3 to 5). The loss weighting directly penalises missed Bad-class predictions more heavily. Val oscillation narrows (0.80–0.83), and test Se improves to 0.7651 (+0.048). Sp drops to 0.8554 as expected from the stronger minority-class bias.
 
-**Run 3** increases dropout from 0.3 to 0.5, retaining all other Run 2 changes. The heavier regularisation reduces overfitting on the small Bad-class population: test Se reaches 0.8274 (+0.062 over Run 2), and the train/val loss gap narrows. The best validation checkpoint now appears at Epoch 2—earlier convergence than Run 2—after which M-Score declines monotonically to early-stop at Epoch 12. Run 3 is selected as the final SQA model.
+**Run 3** increases dropout from 0.3 to 0.5, retaining all other Run 2 changes. The heavier regularisation reduces overfitting on the small Bad-class population: test Se reaches 0.8274 (+0.062 over Run 2), and the train/val loss gap narrows. The best validation checkpoint now appears at Epoch 2—earlier convergence than Run 2—after which M-Score declines monotonically to early-stop at Epoch 12. Run 3 is selected as the final SQA model. The training curve is shown in Fig. 5.8.
 
-**Table 5.5: SQA model — three-run progression.**
 
-| Metric | Run 1 | Run 2 | **Run 3 (final)** | Run 1→3 change |
-|--------|:-----:|:-----:|:-----------------:|:--------------:|
-| Test M-Score | 0.8046 | 0.8102 | **0.8152** | +0.011 |
-| Test Se (Bad) | 0.7173 | 0.7651 | **0.8274** | +0.110 |
-| Test Sp (Good) | 0.8919 | 0.8554 | 0.8029 | −0.089 |
-| Test Accuracy | 0.8794 | 0.8489 | 0.8046 | — |
-| Best Val Se | 0.7281 | 0.8120 | 0.8759 | +0.148 |
-| Val→Test Se gap | −0.011 | −0.047 | −0.048 | stable ~0.05 |
-| Early stop epoch | 22 | 22 | 12 | faster |
-
-**Table 5.6: Final SQA model (Run 3) vs diagnostic model.**
+**Table 5.4: Final SQA model (Run 3) vs diagnostic model.**
 
 | Metric | Diagnostic Model (Run 6) | SQA Model (Run 3) |
 |--------|:------------------------:|:-----------------:|
@@ -569,41 +546,39 @@ The SQA model shares the same LightweightCNN + CoordAtt architecture (65.12K par
 ![Fig 5.7](photo-from-PC/fig5_4_sqa_runs.png)
 **Figure 5.7: SQA model M-Score, Se, and Sp across three training runs.**
 
-![Fig 5.8a](photo-from-PC/confusion_matrix_sqa.png)
-![Fig 5.8b](photo-from-PC/confusion_matrix_sqa_trainpc.png)
-**Figure 5.8: Confusion matrix for the final SQA model (Run 3) on the test set. Left: evaluated on Pi (INT8); Right: evaluated on training machine (FP32).**
+![Fig 5.8](photo-from-PC/fig5_7_Run3_training_curve.png)
+**Figure 5.8: Training curve for SQA model (Run 3). Train loss decreases steadily across epochs; the best-validation checkpoint is selected at Epoch 2, after which Val M-Score declines monotonically to early-stop at Epoch 12. The dotted line marks Test M-Score = 0.8152, achieved via best-checkpoint selection.**
+
+![Fig 5.9](photo-from-PC/confusion_matrix_sqa_trainpc.png)
+**Figure 5.9: Confusion matrix for the final SQA model (Run 3), FP32 evaluation. FP32 vs INT8 comparison is shown in Section 5.4.**
 
 The persistent Val→Test Se gap of approximately 0.048 across Runs 2 and 3 indicates that the generalisation ceiling is constrained by the small Bad-class population (364 recordings total; roughly 36 recordings in the test split), rather than by the training configuration. Further Se improvement would require additional bad-quality data. The Sp of 0.8029 means approximately 20% of good-quality recordings receive a lower P(Good) weight in the inference aggregation; this reduces effective signal volume but does not introduce noise into the diagnostic stage, and is considered acceptable given the deployment context.
 
 #### 5.3.1 Decision Threshold Analysis
 
-The classification threshold of the SQA model determines the minimum P(Good) required for a segment to be accepted by the inference pipeline. A sweep from 0.30 to 0.80 was conducted on the final SQA model (Run 3). Results are shown in Fig. 5.9.
+The classification threshold of the SQA model determines the minimum P(Good) required for a segment to be accepted by the inference pipeline. A sweep from 0.30 to 0.80 was conducted on the final SQA model (Run 3). Results are shown in Fig. 5.10.
 
 The M-Score curve is notably flat throughout the sweep range (0.8064–0.8143), indicating that the model's discrimination is not strongly threshold-dependent. A threshold of 0.65 is selected as it achieves the highest M-Score while providing a better Se/Sp balance than lower thresholds. Relative to the default 0.50, raising the threshold to 0.65 reduces Se by 0.031 (from 0.9044 to 0.8732) while improving Sp by 0.036 (from 0.7191 to 0.7553). The higher threshold is preferred for the inference gate because it reduces false rejections of genuinely good-quality segments—at threshold 0.50, approximately 28% of good-quality segments would be down-weighted unnecessarily—at a modest and acceptable cost in bad-segment detection.
 
-![Fig 5.9](photo-from-PC/fig5_3_threshold_sqa.png)
-**Figure 5.9: Classification threshold analysis: SQA model (Run 3).**
+![Fig 5.10](photo-from-PC/fig5_3_threshold_sqa.png)
+**Figure 5.10: Classification threshold analysis: SQA model (Run 3).**
 
 ### 5.4 Quantization Impact
 
-Post-training quantization is applied to both models via dynamic range quantization (`tf.lite.Optimize.DEFAULT`), which statically converts all weight tensors from FP32 to INT8 at export time while leaving activations in floating point. Table 5.7 summarises the impact on model size and diagnostic accuracy.
+As described in Section 4.5, dynamic range quantization (`tf.lite.Optimize.DEFAULT`) is applied to both models at export time. Figure 5.13 summarises the impact on model size for both models.
 
-**Table 5.7: FP32 vs INT8 quantization comparison.**
+Figures 5.11–5.12 show the FP32 vs INT8 confusion matrices for the diagnostic and SQA models respectively. All accuracy metrics change by at most 0.1 percentage point, within the expected rounding variation of per-slice evaluation. The storage footprint halves; diagnostic performance is unaffected. Latency impact on the deployment hardware is reported in Section 6.3.
 
-| Metric | FP32 | INT8 (Dynamic Range) | Change |
-|--------|:----:|:--------------------:|:------:|
-| Model size | 302.8 KB | 144.7 KB | −52.2% |
-| Test M-Score | 87.1% | 87.0% | −0.1% |
-| Test Se | 91.7% | 91.7% | 0.0% |
-| Test Sp | 82.4% | 82.3% | −0.1% |
-| Test Accuracy | 84.2% | 84.1% | −0.1% |
+![Fig 5.11a](photo-from-PC/confusion_matrix_diag_trainpc.png)
+![Fig 5.11b](photo-from-PC/confusion_matrix_diag.png)
+**Figure 5.11: Diagnostic model confusion matrices — FP32 (left) vs INT8 (right).**
 
-All accuracy metrics change by at most 0.1 percentage point, within the expected rounding variation of per-slice evaluation. The storage footprint halves; diagnostic performance is unaffected.
+![Fig 5.12a](photo-from-PC/confusion_matrix_sqa_trainpc.png)
+![Fig 5.12b](photo-from-PC/confusion_matrix_sqa.png)
+**Figure 5.12: SQA model confusion matrices — FP32 (left) vs INT8 (right).**
 
-Latency impact is equally marginal and is detailed in Table 6.1 (Section 6.3). Because dynamic range quantization leaves activations at float32 at runtime, the ARM Cortex-A72 cannot execute true INT8 GEMM operations; the benefit is reduced memory bandwidth for weight loading only. Full integer quantization—where both weights and activations are fixed at INT8—would be needed to realise arithmetic-level speedup.
-
-![Fig 5.10](photo-from-PC/fig6_3_model_size.png)
-**Figure 5.10: FP32 vs INT8 model size: diagnostic and SQA models.**
+![Fig 5.13](photo-from-PC/fig6_3_model_size.png)
+**Figure 5.13: FP32 vs INT8 model size: diagnostic and SQA models.**
 
 ---
 
@@ -651,33 +626,21 @@ BLE notification (128 B) → accumulate in ring buffer
 
 ### 6.3 Performance Evaluation
 
-**Table 6.1: Per-stage inference latency on Pi 4B.**
-
-| Stage | FP32 (ms) | INT8 (ms) |
-|-------|:---------:|:---------:|
-| Bandpass filter | 2.24 | 2.24 |
-| Log-Mel spectrogram | 4.73 | 4.73 |
-| SQA model | 13.51 | 13.46 |
-| Diagnostic model | 13.44 | 13.43 |
-| **Total per segment** | **33.92** | **33.87** |
-
-Preprocessing latency is identical across both configurations; the marginal TFLite speedup (under 0.1 ms per stage) reflects weight-only compression rather than arithmetic acceleration.
+Figure 6.2 shows per-stage latency on the Pi 4B for both FP32 and INT8 variants. Preprocessing latency is identical across both configurations; the marginal TFLite speedup (under 0.1 ms per stage) reflects weight-only compression rather than arithmetic acceleration. Because dynamic range quantization leaves activations at float32 at runtime, the ARM Cortex-A72 cannot execute true INT8 GEMM operations; the benefit is reduced memory bandwidth for weight loading only. Full integer quantization—where both weights and activations are fixed at INT8—would be needed to realise arithmetic-level speedup.
 
 ![Fig 6.2](photo-from-PC/fig6_2_latency.png)
 **Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8.**
 
-**Table 6.2: Resource utilisation during inference.**
+**Table 6.1: Resource utilisation during inference.**
 
 | Metric | Value |
 |--------|:-----:|
 | Peak CPU utilisation | 1.3% |
 | Memory usage (RSS) | 249.9 MB |
 
-The 249.9 MB RSS reflects Python runtime overhead; the two TFLite model instances together contribute under 300 KB. Model file sizes for the FP32 and INT8 variants of both models are shown in Fig. 5.10.
+The 249.9 MB RSS reflects Python runtime overhead; the two TFLite model instances together contribute under 300 KB.
 
 **Realtime constraint.** The 33.9 ms total per-segment latency satisfies the 2,000 ms real-time budget with a margin of approximately 59×.
-
-The accuracy impact of INT8 quantization on the diagnostic model is reported in Table 5.7 (Section 5.4); Sensitivity is entirely unaffected, and degradation does not exceed 0.1 percentage point across all metrics.
 
 ### 6.4 User Interface
 
