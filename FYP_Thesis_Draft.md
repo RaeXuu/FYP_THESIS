@@ -586,12 +586,14 @@ Figures 5.11–5.12 show the FP32 vs INT8 confusion matrices for the diagnostic 
 
 ### 6.1 System Architecture Overview
 
-The deployed system consists of two physical units: an ESP32-based acquisition device and a Raspberry Pi 4B inference station, communicating exclusively over Bluetooth Low Energy (BLE). The separation of concerns between the two units is deliberate: the ESP32 handles only signal capture and wireless transmission, keeping its firmware simple and power-efficient, while all computation-intensive processing—filtering, feature extraction, and model inference—runs on the Pi.
+The deployed system consists of three physical units: an ESP32-based acquisition device, a Raspberry Pi 4B inference station, and a UPS power module, with BLE as the sole communication link between the ESP32 and the Pi. The separation of concerns between the two computational units is deliberate: the ESP32 handles only signal capture and wireless transmission, keeping its firmware simple and power-efficient, while all computation-intensive processing—filtering, feature extraction, and model inference—runs on the Pi.
 
-![Fig 6.1](photo-from-PC/fig_system_diagram.png)
+![Fig 6.1](photo-from-PC/系统架构图.drawio.png)
 **Figure 6.1: System architecture overview.**
 
 **ESP32 (acquisition side).** The ESP32 captures audio via I²S, decimates to 2,000 Hz, applies a 30× digital gain, and streams 16-bit PCM samples to the Pi over BLE as 128-byte GATT notifications. Hardware design and firmware are described in the companion thesis.
+
+**UPS power module.** A dedicated UPS HAT stacks directly onto the Pi and supplies 5 V / 4 A with uninterruptible pass-through charging. An on-board MCU reports battery voltage and DC input status over UART (GPIO14/15, 115200 baud) every 2 seconds. The Pi reads this stream to derive battery state-of-charge and to trigger software-enforced low-battery protection before the module's hardware cutoff at 3.0 V (see Section 6.5).
 
 **Raspberry Pi 4B (inference side).** The Pi runs a single asyncio event loop (`main_pi.py`) that manages BLE reception, preprocessing, inference, storage, and UI updates concurrently without multi-threading. A `bleak` BLE client subscribes to ESP32 notifications; received bytes accumulate in a bytearray ring buffer. Once 80,000 bytes (40,000 samples = 20 seconds of audio) have arrived, the chunk is placed onto an asyncio queue and handed off to a dedicated inference worker task. Within each 20-second chunk, a sliding window of 2 seconds with 50% overlap (`HOP_SAMPLES = 2,000`) produces 19 overlapping windows; each window is independently preprocessed and scored. The chunk-level label is derived from a quality-weighted average over all windows that pass the SQA check (described in Section 6.2). A background asyncio task refreshes the system-status display every 2 seconds independently of the inference cycle.
 
@@ -633,18 +635,23 @@ Figure 6.2 shows per-stage latency on the Pi 4B for both FP32 and INT8 variants.
 
 **Table 6.1: Resource utilisation during inference.**
 
-| Metric | Value |
-|--------|:-----:|
-| Peak CPU utilisation | 1.3% |
-| Memory usage (RSS) | 249.9 MB |
+| Metric               |  Value   |
+| -------------------- | :------: |
+| Peak CPU utilisation |   1.3%   |
+| Memory usage (RSS)   | 249.9 MB |
+| CPU temperature      | 44.0 °C  |
 
-The 249.9 MB RSS reflects Python runtime overhead; the two TFLite model instances together contribute under 300 KB.
+The 249.9 MB RSS reflects Python runtime overhead; the two TFLite model instances together contribute under 300 KB. CPU temperature remained well below the Pi 4B thermal throttling threshold of 80 °C throughout all tests. The inference thread is pinned to CPU core 3 via `os.sched_setaffinity`, isolating it from BLE reception, OLED updates, and button polling tasks that run on cores 0–2, reducing scheduling jitter.
 
 **Realtime constraint.** The 33.9 ms total per-segment latency satisfies the 2,000 ms real-time budget with a margin of approximately 59×.
 
 ### 6.4 User Interface
 
-**Physical button.** A single tactile button on GPIO27 (internal pull-up, software debounce 20 ms) provides the sole user input. The interaction model is intentionally minimal:
+The system provides audio-visual feedback through two physical buttons, two OLED displays, an RGB LED, and an active buzzer, enabling fully self-contained operation without an external screen or keyboard.
+
+**Physical buttons.** Two tactile buttons with internal pull-up resistors and 20 ms software debounce are mounted on the enclosure.
+
+*Button 1 (GPIO4)* provides the primary session control:
 
 | Action | Effect |
 |--------|--------|
@@ -652,17 +659,26 @@ The 249.9 MB RSS reflects Python runtime overhead; the two TFLite model instance
 | Short press (during session) | Abort current session |
 | Long press ≥ 3 s | Safe shutdown (OLED confirms → `sudo shutdown -h now`) |
 
+*Button 2 (GPIO18)* cycles the secondary OLED between its two display pages (described below).
+
 **Primary OLED (128×64, SSD1306).** Connected via hardware I2C (GPIO2/3, bus 1), this display presents diagnostic-facing information across three states:
 
 - *Standby:* Project name, team members, and supervisor; a heart icon blinks at 1 Hz. Prompts the user to press the button.
 - *Connecting:* "Connecting ESP32…" with a progress bar that fills over the BLE connection timeout and a live countdown in seconds.
 - *Running:* Upper half shows the current chunk number, window progress (e.g., Win: 05/09), and the running Normal probability for the active segment; lower half shows the result and confidence from the previous segment. A heart icon blinks on each valid inference window.
 
-**Secondary OLED (128×32, SSD1306).** Connected via software I2C (GPIO23/24), this display shows CPU usage, RAM utilisation, and CPU temperature, refreshed every 2 seconds independently of the inference cycle.
+**Secondary OLED (128×32, SSD1306).** Connected via software I2C (GPIO23/24), this display supports two pages toggled by Button 2, refreshed every 2 seconds independently of the inference cycle:
+
+- *Page 1 (system status):* CPU utilisation, memory usage, CPU temperature, and a WiFi connectivity indicator.
+- *Page 2 (power status):* Battery state-of-charge (%), battery voltage, and system uptime retrieved from the UPS power module via UART. A 1 Hz flashing lightning icon appears when battery voltage falls below the low-battery threshold.
+
+**RGB LED (GPIO17/22/10).** A tri-colour LED driven by software PWM at 30% brightness encodes the current system state at a glance. Blue solid indicates standby; blue 1 Hz blinking indicates BLE connecting; a blue breathing effect (2-second period) indicates active acquisition and inference. On completion, the LED switches to green solid for a Normal result or red solid for Abnormal. A red 4 Hz rapid blink signals a connection failure or error.
+
+**Buzzer (GPIO25).** An active buzzer provides acoustic confirmation of inference results: one short beep (100 ms) for Normal, three short beeps (100 ms on / 200 ms off) for Abnormal. Low-quality chunks produce no sound, preserving the LED colour from the previous valid result.
 
 ### 6.5 System Reliability
 
-Edge deployment introduces failure modes absent from server environments: intermittent BLE links, unclean power loss, and the absence of an operator to restart crashed processes. Three mechanisms address these.
+Edge deployment introduces failure modes absent from server environments: intermittent BLE links, unclean power loss, and the absence of an operator to restart crashed processes. Five mechanisms address these.
 
 **Service auto-restart (systemd).** The inference application runs as a systemd unit (`heartbeat.service`) with `Restart=on-failure`. On boot, the service starts automatically; after any unhandled exception the process is respawned without user intervention.
 
@@ -670,7 +686,9 @@ Edge deployment introduces failure modes absent from server environments: interm
 
 **BLE error handling.** If the initial connection fails, the system displays an error and re-enters standby, prompting the user to retry. If the link drops mid-session, the inference worker detects the idle state via a 1-second queue timeout and exits cleanly on the next button press.
 
-**Safe shutdown.** SIGTERM, SIGINT, and a 3-second button long press all trigger the same teardown sequence: stop BLE notifications → cancel asyncio tasks → flush log buffers → `sudo shutdown -h now`, avoiding SD card corruption from abrupt power cuts.
+**Safe shutdown and low-battery protection.** SIGTERM, SIGINT, and a 3-second button long press all trigger the same teardown sequence: stop BLE notifications → cancel asyncio tasks → flush log buffers → `sudo shutdown -h now`. The UPS power module reports battery voltage over UART every 2 seconds; the system monitors this stream and applies two software-enforced thresholds. When voltage falls to ≤ 3.4 V (and no DC input is detected), the secondary OLED switches to the power page and a low-battery icon begins flashing. When voltage falls further to ≤ 3.2 V, the system initiates the same graceful teardown sequence, completing orderly shutdown before the hardware MOSFET cuts power at 3.0 V. This 0.2 V margin ensures file system buffers are flushed before abrupt power loss.
+
+**Read-only root filesystem (OverlayFS).** To protect the SD card against corruption from unexpected power loss, the root filesystem is mounted read-only and overlaid with a tmpfs upper layer using the `overlayroot` mechanism. All runtime writes (logs, inference records) go to tmpfs and are intentionally discarded on reboot; the application binary and model files reside in the read-only lower layer and are never written during operation. This eliminates the ext4 journal corruption risk that arises when a write is interrupted by sudden power removal.
 
 ---
 

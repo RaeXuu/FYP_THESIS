@@ -38,7 +38,7 @@ ESP32 BLE → notification_handler() → bytearray buffer
 → 带通滤波整块一次
 → 滑窗切片（2s 窗口，1s hop）→ per-window 峰值归一化
 → logmel_fixed_size()（Log-Mel，shape=(64,64)）
-→ TFLite SQA 模型（质量评估，SQA_THRESHOLD=0.6）
+→ TFLite SQA 模型（质量评估，SQA_THRESHOLD=0.65）
 → TFLite 诊断模型（Normal/Abnormal）
 → SQA 加权平均 → 块级 label
 → 所有块保存至 debug_records/（normal_/abnormal_/noise_ 前缀）
