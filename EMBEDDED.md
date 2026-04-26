@@ -316,6 +316,7 @@ Timeout: 12s                    y=36（每秒倒数）
 - `power.bat_pct()` 由 BATTERY 电压线性估算（3.0V=0%，4.2V=100%）
 - 低电量警告（≤ 3.4V，非充电中）：OLED 2 强制切换到电源页，右上角闪电图标 1Hz 闪烁
 - 安全关机（≤ 3.2V，非充电中）：停止采集 → OLED 提示 → 3 秒后 `shutdown -h now`，在电源模块硬件断电（默认 3.0V）前完成
+- `power_w` 显示 `-- W`（该模块不支持电流采样）
 - `uptime_str` 来自电源模块 ATE 指令响应，格式 `HH:MM:SS`（超过 1 天则 `Xd HH:MM:SS`）
 - `low_bat=True` 时右上角显示 1Hz 闪烁闪电图标，同时 `_oled2_page` 被强制设为 1
 
