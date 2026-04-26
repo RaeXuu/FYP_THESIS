@@ -23,7 +23,7 @@ The diagnostic model is a lightweight convolutional neural network built around 
 
 A dedicated Signal Quality Assessment (SQA) model, sharing the same architecture but trained on quality annotations, precedes the diagnostic stage. It assigns each incoming segment a continuous quality probability, which is used to down-weight degraded inputs in a weighted-average aggregation. The SQA model achieves a Test M-Score of 0.8152 with Sensitivity of 0.8274 on bad-quality detection.
 
-Both models are exported to TFLite and quantized to INT8 via dynamic range quantization, reducing storage footprint from 302.8 KB to 144.7 KB per model (−52.2%) with a M-Score change of −0.1 percentage point and no loss in Sensitivity. On the ARM Cortex-A72, the full inference pipeline processes one 2-second segment in 33.9 ms — a 59× margin over the real-time budget — at 1.3% peak CPU utilisation. These results confirm that accurate, quality-aware heart sound diagnosis is achievable on low-cost embedded hardware without cloud dependency.
+Both models are exported to TFLite and quantized to INT8 via full integer quantization — where weights, activations, and model inputs/outputs are all statically fixed at INT8 using a representative calibration dataset — reducing storage footprint from 302.8 KB to 144.4 KB per model (−52.4%) with a maximum M-Score degradation of 0.0016. On the ARM Cortex-A72, full integer quantization enables native INT8 arithmetic via ARM NEON, accelerating combined two-model inference per segment from 28.3 ms (FP32) to 17.4 ms — a 1.63× speedup — and reducing total per-segment latency to approximately 24 ms, a margin of 82× over the 2-second real-time budget, at 1.3% peak CPU utilisation. These results confirm that accurate, quality-aware heart sound diagnosis is achievable on low-cost embedded hardware without cloud dependency.
 
 ---
 
@@ -212,9 +212,9 @@ This thesis makes the following contributions:
 
 2. A quality-aware dual-model inference pipeline in which a dedicated SQA model assigns continuous quality weights to incoming segments before diagnostic aggregation, reducing the influence of corrupted inputs without discarding them.
 
-3. A complete edge deployment on the Raspberry Pi 4B, including real-time inference evaluation and a demonstration that INT8 post-training quantization incurs no measurable accuracy loss on either model while reducing model size by approximately 4×.
+3. A complete edge deployment on the Raspberry Pi 4B, including a systematic comparison of two INT8 post-training quantization schemes — dynamic range and full integer — against an FP32 baseline, demonstrating that full integer quantization reduces model size by 52.4% with negligible accuracy loss (≤ 0.002 M-Score) while achieving a 1.63× inference speedup on ARM Cortex-A72 via native INT8 NEON arithmetic.
 
-**Main results.** The diagnostic model achieves a Test M-Score of 0.8903 (Se = 0.9485, Sp = 0.8322) on PhysioNet/CinC 2016. The SQA model achieves a Test M-Score of 0.8152 with Se = 0.8274 on bad-quality segment detection. INT8 dynamic range quantization reduces each model's storage footprint from 302.8 KB to 144.7 KB (−52.2%) with a M-Score change of −0.1 percentage point and no change in Sensitivity. The full inference pipeline processes one 2-second segment in 33.9 ms on the ARM Cortex-A72 — a 59× margin over the real-time budget — at 1.3% peak CPU utilisation.
+**Main results.** The diagnostic model achieves a Test M-Score of 0.8903 (Se = 0.9485, Sp = 0.8322) on PhysioNet/CinC 2016. The SQA model achieves a Test M-Score of 0.8152 with Se = 0.8274 on bad-quality segment detection. INT8 full integer quantization reduces each model's storage footprint from 302.8 KB to 144.4 KB (−52.4%) with a maximum M-Score degradation of 0.0016. Combined two-model inference per segment is accelerated from 28.3 ms (FP32) to 17.4 ms — a 1.63× speedup — reducing total per-segment latency to approximately 24 ms on the ARM Cortex-A72, a margin of 82× over the real-time budget, at 1.3% peak CPU utilisation.
 
 **Scope and assumptions.** The models are trained and evaluated exclusively on the PhysioNet/CinC 2016 benchmark. The system performs binary Normal/Abnormal classification only and does not identify disease subtypes. A sampling rate of 2,000 Hz is assumed sufficient to capture the diagnostically relevant frequency range. The target inference hardware is the Raspberry Pi 4B (ARM Cortex-A72); performance figures reported in this thesis apply to this platform specifically.
 
@@ -371,7 +371,7 @@ The network begins with a single standard 3×3 convolutional layer that projects
 | global\_pool | AdaptiveAvgPool2d(1,1) | 256 | 1 × 1 |
 | classifier | Dropout(0.3), Linear | 256 → 2 | — |
 
-The total trainable parameter count is approximately 65.12K. The quantized INT8 TFLite model occupies 144.7 KB on disk.
+The total trainable parameter count is approximately 65.12K. The INT8 full integer quantized TFLite model occupies 144.4 KB on disk.
 
 ![Fig 4.3](photo-from-PC/fig4_1_architecture_flat.png)
 **Figure 4.3: LightweightCNN architecture.**
@@ -415,11 +415,15 @@ The SQA model therefore shares the same LightweightCNN + CoordAtt architecture a
 
 ### 4.5 Model Quantization
 
-Both models are converted to TFLite format using the `ai_edge_torch` library, which compiles a PyTorch model directly to a TFLite flatbuffer without an intermediate ONNX step. Two variants are produced per model: an FP32 baseline and a quantized version using dynamic range quantization (`tf.lite.Optimize.DEFAULT`).
+Both models are converted to TFLite format using the `ai_edge_torch` library, which compiles a PyTorch model directly to a TFLite flatbuffer via a PyTorch → StableHLO → TFLiteConverter pipeline, without an intermediate ONNX step. Three variants are produced per model.
 
-Dynamic range quantization statically converts all weight tensors from FP32 to INT8 at export time, reducing the weight storage footprint by approximately 4×. Activations are not statically quantized; instead, their ranges are computed dynamically per inference call. This approach requires no calibration dataset, making it straightforward to apply to any trained checkpoint. The trade-off relative to full integer quantization—where both weights and activations are fixed at INT8—is that activation quantization overhead occurs at runtime rather than being amortized.
+**FP32 baseline.** The model is exported with no quantization, retaining 32-bit floating-point weights and activations. This serves as the accuracy and latency reference.
 
-Quantitative results — model size reduction, accuracy impact, and latency — are reported in Section 5.4.
+**INT8 dynamic range quantization.** All weight tensors are statically converted from FP32 to INT8 at export time using `tf.lite.Optimize.DEFAULT`, reducing weight storage by approximately 4×. Activations are not statically quantized; their ranges are computed dynamically per inference call. This approach requires no calibration dataset. On ARM Cortex-A72, however, the runtime must dequantize weights back to FP32 before each multiply-accumulate operation, so the compute path remains FP32 throughout and no arithmetic-level speedup is achieved.
+
+**INT8 full integer quantization.** Both weights and activations are statically fixed at INT8, and the model's input and output tensors are also INT8. This requires a representative calibration dataset — 200 randomly sampled Log-Mel segments per model — so the converter can observe per-tensor activation distributions and determine the appropriate INT8 scale and zero-point parameters at export time. With the entire compute graph operating in INT8, the ARM Cortex-A72 can execute native INT8 dot-product operations via its NEON SIMD unit, enabling true arithmetic-level acceleration over FP32. At inference time, the preprocessing stage reads the input quantization parameters embedded in the model file to convert float32 Log-Mel features to INT8 before invoking the model, and similarly dequantizes INT8 logits back to float32 for softmax aggregation.
+
+Quantitative results — model size, accuracy impact, and latency — are reported in Sections 5.4 and 6.3.
 
 ---
 
@@ -565,17 +569,33 @@ The M-Score curve is notably flat throughout the sweep range (0.8064–0.8143), 
 
 ### 5.4 Quantization Impact
 
-As described in Section 4.5, dynamic range quantization (`tf.lite.Optimize.DEFAULT`) is applied to both models at export time. Figure 5.13 summarises the impact on model size for both models.
+As described in Section 4.5, two INT8 post-training quantization schemes are evaluated against the FP32 baseline: dynamic range quantization and full integer quantization. Table 5.5 summarises the accuracy and storage impact of both schemes on the test set. Figure 5.13 illustrates the model size reduction.
 
-Figures 5.11–5.12 show the FP32 vs INT8 confusion matrices for the diagnostic and SQA models respectively. All accuracy metrics change by at most 0.1 percentage point, within the expected rounding variation of per-slice evaluation. The storage footprint halves; diagnostic performance is unaffected. Latency impact on the deployment hardware is reported in Section 6.3.
+**Table 5.5: Quantization impact on accuracy and model size (test set evaluation).**
+
+| | FP32 | INT8 Dynamic | INT8 Full Integer |
+|---|:---:|:---:|:---:|
+| **Diagnostic model** | | | |
+| M-Score | 0.8835 | 0.8838 | 0.8828 |
+| Se | 0.9645 | 0.9645 | 0.9637 |
+| Sp | 0.8025 | 0.8031 | 0.8019 |
+| **SQA model** | | | |
+| M-Score | 0.8118 | 0.8121 | 0.8102 |
+| Se | 0.9044 | 0.9044 | 0.9002 |
+| Sp | 0.7191 | 0.7198 | 0.7203 |
+| **Size (per model)** | 302.8 KB | 144.7 KB | 144.4 KB |
+
+Dynamic range quantization produces no measurable accuracy change on either model. Full integer quantization incurs a maximum M-Score degradation of 0.0016 on the SQA model — within the expected variation of per-slice evaluation on a finite test set — while achieving the same storage reduction. The storage footprint of both INT8 variants is approximately half that of the FP32 baseline. Latency impact on the deployment hardware is reported in Section 6.3.
+
+Figures 5.11–5.12 show the FP32 vs INT8 Dynamic Range confusion matrices for the diagnostic and SQA models respectively; the INT8 Full Integer matrices are numerically summarised in Table 5.5.
 
 ![Fig 5.11a](photo-from-PC/confusion_matrix_diag_trainpc.png)
 ![Fig 5.11b](photo-from-PC/confusion_matrix_diag.png)
-**Figure 5.11: Diagnostic model confusion matrices — FP32 (left) vs INT8 (right).**
+**Figure 5.11: Diagnostic model confusion matrices — FP32 (left) vs INT8 Dynamic Range (right).**
 
 ![Fig 5.12a](photo-from-PC/confusion_matrix_sqa_trainpc.png)
 ![Fig 5.12b](photo-from-PC/confusion_matrix_sqa.png)
-**Figure 5.12: SQA model confusion matrices — FP32 (left) vs INT8 (right).**
+**Figure 5.12: SQA model confusion matrices — FP32 (left) vs INT8 Dynamic Range (right).**
 
 ![Fig 5.13](photo-from-PC/fig6_3_model_size.png)
 **Figure 5.13: FP32 vs INT8 model size: diagnostic and SQA models.**
@@ -628,10 +648,20 @@ BLE notification (128 B) → accumulate in ring buffer
 
 ### 6.3 Performance Evaluation
 
-Figure 6.2 shows per-stage latency on the Pi 4B for both FP32 and INT8 variants. Preprocessing latency is identical across both configurations; the marginal TFLite speedup (under 0.1 ms per stage) reflects weight-only compression rather than arithmetic acceleration. Because dynamic range quantization leaves activations at float32 at runtime, the ARM Cortex-A72 cannot execute true INT8 GEMM operations; the benefit is reduced memory bandwidth for weight loading only. Full integer quantization—where both weights and activations are fixed at INT8—would be needed to realise arithmetic-level speedup.
+Table 6.2 reports per-model inference latency on the Pi 4B across all three quantization variants, measured using 100 inference calls with 10 warmup rounds at 1,800 MHz clock frequency. Figure 6.2 shows the per-stage latency breakdown for FP32 and INT8 Dynamic Range.
+
+**Table 6.2: Per-model inference latency on RPi 4B, ARM Cortex-A72 (median, ms).**
+
+| Model        |   FP32   | INT8 Dynamic | INT8 Full Integer | Speedup (Full vs FP32) |
+| ------------ | :------: | :----------: | :---------------: | :--------------------: |
+| Diagnostic   |   14.1   |     13.8     |        8.7        |         1.62×          |
+| SQA          |   14.2   |     13.8     |        8.7        |         1.63×          |
+| **Combined** | **28.3** |   **27.6**   |     **17.4**      |       **1.63×**        |
+
+INT8 Dynamic Range quantization achieves only a marginal latency reduction (under 0.5 ms per model) because dynamic range quantization compresses weights to INT8 for storage but dequantizes them back to FP32 before each multiply-accumulate operation at runtime; the actual compute path remains FP32 throughout. INT8 Full Integer quantization eliminates this dequantization step: with both weights and activations statically fixed at INT8, the ARM Cortex-A72 executes native INT8 dot-product operations via its NEON SIMD unit, yielding a 1.63× reduction in combined two-model inference latency.
 
 ![Fig 6.2](photo-from-PC/fig6_2_latency.png)
-**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8.**
+**Figure 6.2: Per-stage inference latency on Pi 4B, FP32 vs INT8 Dynamic Range.**
 
 **Table 6.1: Resource utilisation during inference.**
 
@@ -643,7 +673,7 @@ Figure 6.2 shows per-stage latency on the Pi 4B for both FP32 and INT8 variants.
 
 The 249.9 MB RSS reflects Python runtime overhead; the two TFLite model instances together contribute under 300 KB. CPU temperature remained well below the Pi 4B thermal throttling threshold of 80 °C throughout all tests. The inference thread is pinned to CPU core 3 via `os.sched_setaffinity`, isolating it from BLE reception, OLED updates, and button polling tasks that run on cores 0–2, reducing scheduling jitter.
 
-**Realtime constraint.** The 33.9 ms total per-segment latency satisfies the 2,000 ms real-time budget with a margin of approximately 59×.
+**Realtime constraint.** INT8 Full Integer quantization reduces combined two-model inference from 28.3 ms to 17.4 ms per segment. Including the shared preprocessing stage (bandpass filtering and Log-Mel extraction, approximately 7 ms), total per-segment latency is approximately 24 ms — a margin of 82× over the 2,000 ms real-time budget.
 
 ### 6.4 User Interface
 
@@ -702,7 +732,7 @@ A lightweight CNN integrating Coordinate Attention into depthwise separable conv
 
 A dedicated SQA model (Test M-Score = 0.8152, Se = 0.8274) runs ahead of the diagnostic stage, assigning each incoming segment a continuous quality weight. This reduces the influence of corrupted inputs without binary gating or a hand-tuned threshold.
 
-INT8 post-training quantization halves storage footprint (302.8 KB → 144.7 KB) with a M-Score change of −0.1 percentage point and no change in Sensitivity. Per-segment latency is 33.9 ms on the ARM Cortex-A72, leaving a 59× real-time margin.
+Two INT8 post-training quantization schemes are evaluated. Dynamic range quantization halves storage footprint (302.8 KB → 144.7 KB) with negligible accuracy impact but no latency benefit on ARM. Full integer quantization achieves the same storage reduction (144.4 KB) with a maximum M-Score degradation of 0.0016, and additionally accelerates combined two-model inference from 28.3 ms (FP32) to 17.4 ms — a 1.63× speedup via native INT8 NEON arithmetic — reducing total per-segment latency to approximately 24 ms and leaving a 82× real-time margin.
 
 Taken together, these results demonstrate that accurate, quality-aware cardiac screening is achievable entirely on a $35 single-board computer, without cloud connectivity or GPU-class hardware. The system closes the gap between laboratory-grade deep learning accuracy and point-of-care deployability, providing a concrete existence proof that edge AI is a viable path for low-cost medical diagnostics in resource-limited or remote settings.
 
@@ -713,8 +743,6 @@ Taken together, these results demonstrate that accurate, quality-aware cardiac s
 **Dataset scope.** Both models are evaluated only on PhysioNet/CinC 2016. Generalisation to recordings from the actual ESP32 hardware in home environments has not been tested.
 
 **SQA sensitivity.** At Se = 0.8274, roughly 17% of bad-quality segments are not caught, providing only partial protection against corrupted inputs.
-
-**Quantization depth.** Dynamic range quantization compresses weights only; activations remain float32 at runtime. No arithmetic speedup is achieved — the benefit is storage reduction alone.
 
 **Output granularity.** The system produces a binary Normal/Abnormal label with no disease subtype information.
 
