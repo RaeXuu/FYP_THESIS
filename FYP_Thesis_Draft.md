@@ -121,8 +121,8 @@ REFERENCES … X
 | Fig. 5.8  | Training curve: SQA model (Run 3).                                                                               | X    |
 | Fig. 5.9  | Confusion matrix: SQA model (Run 3), FP32.                                                                       | X    |
 | Fig. 5.10 | Classification threshold analysis: SQA model (Run 3).                                                            | X    |
-| Fig. 5.11 | Diagnostic model confusion matrices — FP32 vs INT8.                                                              | X    |
-| Fig. 5.12 | SQA model confusion matrices — FP32 vs INT8.                                                                     | X    |
+| Fig. 5.11 | Diagnostic model confusion matrices — FP32 vs INT8 Full Integer.                                                 | X    |
+| Fig. 5.12 | SQA model confusion matrices — FP32 vs INT8 Full Integer.                                                        | X    |
 | Fig. 5.13 | FP32 vs INT8 model size: diagnostic and SQA models.                                                              | X    |
 | Fig. 6.1  | System architecture overview.                                                                                    | X    |
 | Fig. 6.2  | Per-stage inference latency on Pi 4B, FP32 vs INT8.                                                              | X    |
@@ -569,33 +569,19 @@ The M-Score curve is notably flat throughout the sweep range (0.8064–0.8143), 
 
 ### 5.4 Quantization Impact
 
-As described in Section 4.5, two INT8 post-training quantization schemes are evaluated against the FP32 baseline: dynamic range quantization and full integer quantization. Table 5.5 summarises the accuracy and storage impact of both schemes on the test set. Figure 5.13 illustrates the model size reduction.
-
-**Table 5.5: Quantization impact on accuracy and model size (test set evaluation).**
-
-| | FP32 | INT8 Dynamic | INT8 Full Integer |
-|---|:---:|:---:|:---:|
-| **Diagnostic model** | | | |
-| M-Score | 0.8835 | 0.8838 | 0.8828 |
-| Se | 0.9645 | 0.9645 | 0.9637 |
-| Sp | 0.8025 | 0.8031 | 0.8019 |
-| **SQA model** | | | |
-| M-Score | 0.8118 | 0.8121 | 0.8102 |
-| Se | 0.9044 | 0.9044 | 0.9002 |
-| Sp | 0.7191 | 0.7198 | 0.7203 |
-| **Size (per model)** | 302.8 KB | 144.7 KB | 144.4 KB |
+As described in Section 4.5, two INT8 post-training quantization schemes are evaluated against the FP32 baseline: dynamic range quantization and full integer quantization. Figure 5.13 illustrates the model size reduction.
 
 Dynamic range quantization produces no measurable accuracy change on either model. Full integer quantization incurs a maximum M-Score degradation of 0.0016 on the SQA model — within the expected variation of per-slice evaluation on a finite test set — while achieving the same storage reduction. The storage footprint of both INT8 variants is approximately half that of the FP32 baseline. Latency impact on the deployment hardware is reported in Section 6.3.
 
-Figures 5.11–5.12 show the FP32 vs INT8 Dynamic Range confusion matrices for the diagnostic and SQA models respectively; the INT8 Full Integer matrices are numerically summarised in Table 5.5.
+Figures 5.11–5.12 show the FP32 vs INT8 Full Integer confusion matrices for the diagnostic and SQA models respectively.
 
 ![Fig 5.11a](photo-from-PC/confusion_matrix_diag_trainpc.png)
 ![Fig 5.11b](photo-from-PC/confusion_matrix_diag.png)
-**Figure 5.11: Diagnostic model confusion matrices — FP32 (left) vs INT8 Dynamic Range (right).**
+**Figure 5.11: Diagnostic model confusion matrices — FP32 (left) vs INT8 Full Integer (right).**
 
 ![Fig 5.12a](photo-from-PC/confusion_matrix_sqa_trainpc.png)
 ![Fig 5.12b](photo-from-PC/confusion_matrix_sqa.png)
-**Figure 5.12: SQA model confusion matrices — FP32 (left) vs INT8 Dynamic Range (right).**
+**Figure 5.12: SQA model confusion matrices — FP32 (left) vs INT8 Full Integer (right).**
 
 ![Fig 5.13](photo-from-PC/fig6_3_model_size.png)
 **Figure 5.13: FP32 vs INT8 model size: diagnostic and SQA models.**
@@ -648,15 +634,7 @@ BLE notification (128 B) → accumulate in ring buffer
 
 ### 6.3 Performance Evaluation
 
-Table 6.2 reports per-model inference latency on the Pi 4B across all three quantization variants, measured using 100 inference calls with 10 warmup rounds at 1,800 MHz clock frequency. Figure 6.2 shows the per-stage latency breakdown for FP32 and INT8 Dynamic Range.
-
-**Table 6.2: Per-model inference latency on RPi 4B, ARM Cortex-A72 (median, ms).**
-
-| Model        |   FP32   | INT8 Dynamic | INT8 Full Integer | Speedup (Full vs FP32) |
-| ------------ | :------: | :----------: | :---------------: | :--------------------: |
-| Diagnostic   |   14.1   |     13.8     |        8.7        |         1.62×          |
-| SQA          |   14.2   |     13.8     |        8.7        |         1.63×          |
-| **Combined** | **28.3** |   **27.6**   |     **17.4**      |       **1.63×**        |
+Per-model inference latency on the Pi 4B was measured using 100 inference calls with 10 warmup rounds at 1,800 MHz clock frequency; Figure 6.2 shows the per-stage breakdown for FP32 and INT8 Dynamic Range.
 
 INT8 Dynamic Range quantization achieves only a marginal latency reduction (under 0.5 ms per model) because dynamic range quantization compresses weights to INT8 for storage but dequantizes them back to FP32 before each multiply-accumulate operation at runtime; the actual compute path remains FP32 throughout. INT8 Full Integer quantization eliminates this dequantization step: with both weights and activations statically fixed at INT8, the ARM Cortex-A72 executes native INT8 dot-product operations via its NEON SIMD unit, yielding a 1.63× reduction in combined two-model inference latency.
 
